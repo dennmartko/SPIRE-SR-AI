@@ -1,0 +1,8 @@
+setup.py
+SPIRE_SR_AI.egg-info/PKG-INFO
+SPIRE_SR_AI.egg-info/SOURCES.txt
+SPIRE_SR_AI.egg-info/dependency_links.txt
+SPIRE_SR_AI.egg-info/top_level.txt
+models/__init__.py
+models/architectures/__init__.py
+scripts/__init__.py

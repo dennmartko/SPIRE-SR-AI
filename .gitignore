@@ -1,0 +1,15 @@
+# Ignore the data directory
+data/
+
+# Ignore all .log files
+*.log
+
+# Ignore all .tmp files
+*.tmp
+
+# Ignore any directory named "output"
+output/
+
+# Ignore Python bytecode files
+__pycache__/
+*.pyc
