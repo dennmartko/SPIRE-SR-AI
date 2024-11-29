@@ -1,14 +1,14 @@
-# Ignore the data directory
-data/
+# Ignore these directories
+data/*
+results/*
+logs/*
+models/checkpoints/*
 
 # Ignore all .log files
 *.log
 
 # Ignore all .tmp files
 *.tmp
-
-# Ignore any directory named "output"
-output/
 
 # Ignore Python bytecode files
 __pycache__/
