@@ -98,15 +98,21 @@ ckpt = tf.train.Checkpoint(optimizer=optimizer, model=model)
 manager_bestmodel = tf.train.CheckpointManager(ckpt, os.path.join(model_weights_path, "BestModel"), max_to_keep=1)
 manager_ckpt = tf.train.CheckpointManager(ckpt, os.path.join(model_weights_path, "Checkpoint"), max_to_keep=1)
 
+training_history_file = os.path.join(model_weights_path, "history.json")
 if not first_run:
     manager_ckpt.restore_or_initialize()
+    printlog(f"{datetime.datetime.now()} - Found checkpoint folder: {model_weights_path}!", log_file)
     printlog(f"{datetime.datetime.now()} - Restored previous model checkpoint!", log_file)
+
+    # Get history
+    history = load_training_history(training_history_file)
 else:
     model.summary(print_fn=lambda x: printlog(x, log_file))
+    history = {'epochs': [], 'train_loss': [], 'val_loss': [], 'improved': []}
 
-# Get history, corresponds to the ckpt weights
-training_history_file = os.path.join(model_weights_path, "history.json")
-history = load_training_history(training_history_file, first_run)
+    # Write history file to disk
+    # This ensures that training can always be restarted.
+    save_training_history(history, training_history_file)
 
 # Training loop
 best_val_loss = float('inf')

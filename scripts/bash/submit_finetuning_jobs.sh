@@ -25,7 +25,8 @@ COUNTER=1
 # Loop over all ALPHA values
 for ALPHA in "${ALPHAS[@]}"; do
     # Generate a unique run name
-    RUN_NAME="finetune_run_${COUNTER}_$(date +%d%b%Y)"
+    # Should not depend on time, as training restarts are impossible
+    RUN_NAME="finetune_run_${COUNTER}"
     
     # Define the config file name
     CONFIG_FILE="$CONFIG_DIR/${RUN_NAME}.yaml"

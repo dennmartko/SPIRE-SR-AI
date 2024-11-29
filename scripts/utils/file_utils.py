@@ -35,12 +35,9 @@ def save_training_history(history, file_path):
     with open(file_path, 'w') as f:
         json.dump(history, f, indent=4, cls=JSONEncoder)
 
-def load_training_history(file_path, first_run):
-    if not first_run:
-        with open(file_path, 'r') as f:
-            history = json.load(f)
-    else:
-        history = {'epochs': [], 'train_loss': [], 'val_loss': [], 'improved': []}
+def load_training_history(file_path):
+    with open(file_path, 'r') as f:
+        history = json.load(f)
     return history
 
 def create_model_ckpt_folder(model_name, run_name):
@@ -61,12 +58,13 @@ def create_model_ckpt_folder(model_name, run_name):
 
 def create_log_file(model_name, run_name, first_run):
     model_log_dir = os.path.join(get_main_dir(), "logs", model_name)
-    log_file = os.path.join(model_log_dir, run_name)
+    log_file = os.path.join(model_log_dir, run_name + ".log")
 
     # Check if directory & log file need to be created
     if first_run:
+        if not os.path.exists(model_log_dir):
+            os.mkdir(model_log_dir)
         open(log_file, 'w').close()
-        os.mkdir(model_log_dir)
     return log_file
 
 def log_epoch_details(epoch, train_loss, val_loss, improved, log_file):
