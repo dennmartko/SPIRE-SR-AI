@@ -13,7 +13,7 @@ TRAIN_SCRIPT="/scratch/p317470/SPIRE-SR-AI/scripts/train/train.py"
 mkdir -p "$CONFIG_DIR"
 
 # Hyperparameter options (for tuning)
-ALPHAS=(0 0.1 0.25 0.5 0.75 0.999 1.0)
+ALPHAS=(0 0.1 0.25 0.5 0.75 0.9 1.0)
 BATCH_SIZE=48
 INITIAL_LR=0.01
 END_LR=0.0001
@@ -26,7 +26,7 @@ COUNTER=1
 for ALPHA in "${ALPHAS[@]}"; do
     # Generate a unique run name
     # Should not depend on time, as training restarts are impossible
-    RUN_NAME="finetune_run_${COUNTER}"
+    RUN_NAME="new_finetune_run_${COUNTER}"
     
     # Define the config file name
     CONFIG_FILE="$CONFIG_DIR/${RUN_NAME}.yaml"
@@ -43,8 +43,8 @@ model:
 training:
   polynomial_lr_schedule: [${INITIAL_LR}, ${END_LR}, ${DECAY_EPOCHS}, 2]  # initial lr, end lr, epochs, power
   batch_size: ${BATCH_SIZE}
-  number_of_epochs: 1000  # Maximum number of epochs
-  patience: 100  # After how many epochs training stops with no improvement in val loss
+  number_of_epochs: 5000  # Maximum number of epochs
+  patience: 200  # After how many epochs training stops with no improvement in val loss
   alpha: ${ALPHA} # hyperparameter for the losses
 
 data:

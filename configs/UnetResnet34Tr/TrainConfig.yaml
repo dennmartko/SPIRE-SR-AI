@@ -9,8 +9,8 @@ training:
   polynomial_lr_schedule: [0.01, 0.0001, 200, 2]  # initial lr, end lr, epochs, power
   batch_size: 16
   number_of_epochs: 1000  # Maximum number of epochs
-  patience: 100  # After how many epochs training stops with no improvement in val loss
-  alpha: 0.75 # hyperparameter for the losses
+  patience: 5  # After how many epochs training stops with no improvement in val loss
+  alpha: .99 # hyperparameter for the losses
 
 data:
   # Data specific settings, change to needs.

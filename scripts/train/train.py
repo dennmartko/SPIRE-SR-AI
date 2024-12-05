@@ -99,6 +99,8 @@ manager_bestmodel = tf.train.CheckpointManager(ckpt, os.path.join(model_weights_
 manager_ckpt = tf.train.CheckpointManager(ckpt, os.path.join(model_weights_path, "Checkpoint"), max_to_keep=1)
 
 training_history_file = os.path.join(model_weights_path, "history.json")
+
+
 if not first_run:
     manager_ckpt.restore_or_initialize()
     printlog(f"{datetime.datetime.now()} - Found checkpoint folder: {model_weights_path}!", log_file)
@@ -106,9 +108,10 @@ if not first_run:
 
     # Get history
     history = load_training_history(training_history_file)
+
 else:
     model.summary(print_fn=lambda x: printlog(x, log_file))
-    history = {'epochs': [], 'train_loss': [], 'val_loss': [], 'improved': []}
+    history = {'epochs': [], 'train_loss': [], 'val_loss': [], 'patience': []}
 
     # Write history file to disk
     # This ensures that training can always be restarted.
@@ -116,7 +119,7 @@ else:
 
 # Training loop
 best_val_loss = float('inf')
-epochs_without_improvement = 0
+epochs_without_improvement = 0 if len(history["patience"]) == 0 else history["patience"][-1]
 patience = config["training"]["patience"]
 num_epochs = config["training"]["number_of_epochs"]
 start_epoch = len(history["epochs"]) + 1
@@ -164,7 +167,7 @@ for epoch in tqdm(epochs, desc="Training model..."):
     history["epochs"].append(epoch)
     history["train_loss"].append(avg_train_loss)
     history["val_loss"].append(avg_val_loss)
-    history["improved"].append(int(improved))
+    history["patience"].append(epochs_without_improvement)
 
     # Checkpointing, history saving and display of training progress
     if epoch % 10 == 0:

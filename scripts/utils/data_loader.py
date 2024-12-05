@@ -97,8 +97,8 @@ def create_dataset(directory, input_class_names, target_class_names, batch_size,
     if is_training:
         dataset = dataset.map(
             lambda inputs, output: augment(inputs, output),
-            num_parallel_calls=tf.data.AUTOTUNE
-        )
+            num_parallel_calls=tf.data.AUTOTUNE # Note, this parallelism can cause minor within-batch shuffling
+        ) # Think about doing this after the batch call?
 
     
     # Define the dataset's structure with TensorSpec
