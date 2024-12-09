@@ -3,6 +3,7 @@ import numpy as np
 import os
 from astropy.io import fits
 from glob import glob
+from astropy.wcs import WCS
 
 def parse_fits_numpy(file_path):
     """Reads FITS file using numpy and returns the data from HDU index 0."""
@@ -119,3 +120,71 @@ def create_dataset(directory, input_class_names, target_class_names, batch_size,
     # if is_training:
     #     dataset = dataset.repeat()
     return dataset, size
+
+def load_input_data_asarray(indices, classes, path, tensor_shape_X):
+    """
+    Loads input data into a numpy array from a directory containing the class FITS files.
+    
+    Parameters:
+    - indices: List of indices for the data files.
+    - classes: List of class names corresponding to subdirectories or file prefixes.
+    - path: Base directory path containing the class data.
+    - tensor_shape_X: Shape of the tensor to hold `data_X`.
+    
+    Returns:
+    - data_X: Numpy array containing input data.
+    """
+    data_X = np.zeros((len(indices), ) + tensor_shape_X, dtype=np.float32)
+
+    for idx, i in enumerate(indices):
+        for k, class_name in enumerate(classes):
+            file_path = os.path.join(path, f"{class_name}/{class_name}_{i}.fits")
+            with fits.open(file_path, memmap=False) as hdu:
+                data_X[idx][:, :, k] = hdu[0].data
+
+    return data_X
+
+def load_target_data_asarray(indices, target_classes, path, tensor_shape_Y):
+    """
+    Loads target data and source catalogs for multiple target classes, and stores WCS information per index.
+
+    Parameters:
+    - indices: List of indices for the data files.
+    - target_classes: List of target class names corresponding to subdirectories or file prefixes.
+    - path: Base directory path containing the target class data.
+    - tensor_shape_Y: Shape of the tensor to hold `data_Y`.
+    
+    Returns:
+    - data_Y: Numpy array containing target data.
+    - source_catalogs: Dictionary mapping target class names to their respective source catalogs.
+    - wcs_array: List of WCS objects, one for each index.
+    """
+    data_Y = np.zeros((len(indices), ) + tensor_shape_Y, dtype=np.float32)
+    source_catalogs = {f"S{class_name[:-2]}": [] for class_name in target_classes}
+    wcs_array = [None] * len(indices)
+
+    for idx, i in enumerate(indices):
+        for class_name in target_classes:
+            file_path = os.path.join(path, f"{class_name}/{class_name}_{i}.fits")
+            with fits.open(file_path, memmap=False) as hdu:
+                # Load target data
+                data_Y[idx, :, :, target_classes.index(class_name)] = hdu[0].data
+                
+                # Store WCS only once per index
+                if wcs_array[idx] is None:
+                    wcs_array[idx] = WCS(hdu[0].header)
+                
+                # Process source catalog from the second HDU
+                if len(hdu) > 1:  # Ensure there is a catalog extension
+                    catalog = np.array([list(row) for row in hdu[1].data])
+                    catalog = np.column_stack((catalog, np.full(len(catalog), i)))  # Add index info
+                    source_catalogs[f"S{class_name[:-2]}"].append(catalog)
+
+    # Combine catalogs for each class into a single array
+    for band in source_catalogs:
+        if source_catalogs[band]:
+            source_catalogs[band] = np.vstack(source_catalogs[band])
+        else:
+            source_catalogs[band] = np.empty((0, 0))
+
+    return data_Y, source_catalogs, wcs_array

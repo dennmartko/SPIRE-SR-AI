@@ -58,7 +58,6 @@ inputs, labels = next(iter(val_ds.take(1)))
 save = os.path.join(get_main_dir(), "images/data_samples.jpg")
 data_debug_plot(inputs, labels, input_class_names, target_class_names, save)
 
-
 # Get model
 model_name = config["model"]["model"]
 run_name = config["model"]["run_name"]
@@ -118,8 +117,8 @@ else:
     save_training_history(history, training_history_file)
 
 # Training loop
-best_val_loss = float('inf')
-epochs_without_improvement = 0 if len(history["patience"]) == 0 else history["patience"][-1]
+best_val_loss = np.min(history["val_loss"]) if history["val_loss"] else float('inf')
+epochs_without_improvement = 0 if history["patience"] else history["patience"][-1]
 patience = config["training"]["patience"]
 num_epochs = config["training"]["number_of_epochs"]
 start_epoch = len(history["epochs"]) + 1
@@ -160,6 +159,8 @@ for epoch in tqdm(epochs, desc="Training model..."):
         best_val_loss = avg_val_loss
         epochs_without_improvement = 0
         manager_bestmodel.save()
+    else:
+        epochs_without_improvement+=1;
 
     log_epoch_details(epoch, avg_train_loss, avg_val_loss, improved, log_file)
 

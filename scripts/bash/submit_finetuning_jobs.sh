@@ -17,7 +17,7 @@ ALPHAS=(0 0.1 0.25 0.5 0.75 0.9 1.0)
 BATCH_SIZE=48
 INITIAL_LR=0.01
 END_LR=0.0001
-DECAY_EPOCHS=200
+DECAY_EPOCHS=250
 
 # Counter for unique run names
 COUNTER=1
@@ -49,7 +49,7 @@ training:
 
 data:
   # Data specific settings, change to needs.
-  data_path: "/mnt/d/SPIRE-SR-AI/data/processed/50deg_shark_sides_spritz"
+  data_path: "/scratch/p317470/SPIRE-SR-AI/data/processed/50deg_shark_sides_spritz"
   input: ["24", "250", "350", "500"]  # class names
   target: ["500SR"]  # class names
 EOL
