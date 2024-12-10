@@ -10,13 +10,13 @@ EVALUATION_SCRIPT="/mnt/d/SPIRE-SR-AI/scripts/evaluate/evaluate_target_simulatio
 
 # Define the IDs for evaluation
 ID_LIST=(1 2 3 4 5 6 7)  # Uncomment to dynamically create run_names
-RUN_NAMES=("new_finetune_run_7")  # Uncomment for predefined run names without ID
+#RUN_NAMES=("new_finetune_run_7")  # Uncomment for predefined run names without ID
 
 # Generate RUN_NAMES dynamically using ID_LIST
-# RUN_NAMES=()
-# for ID in "${ID_LIST[@]}"; do
-#     RUN_NAMES+=("dynamic_run_${ID}")
-# done
+RUN_NAMES=()
+for ID in "${ID_LIST[@]}"; do
+    RUN_NAMES+=("new_finetune_run_${ID}")
+done
 
 # Loop over all RUN_NAMES
 for RUN_NAME in "${RUN_NAMES[@]}"; do

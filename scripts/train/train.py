@@ -117,8 +117,8 @@ else:
     save_training_history(history, training_history_file)
 
 # Training loop
-best_val_loss = np.min(history["val_loss"]) if history["val_loss"] else float('inf')
-epochs_without_improvement = 0 if history["patience"] else history["patience"][-1]
+best_val_loss = np.min(history["val_loss"]) if not history["val_loss"] else float('inf')
+epochs_without_improvement = 0 if not history["patience"] else history["patience"][-1]
 patience = config["training"]["patience"]
 num_epochs = config["training"]["number_of_epochs"]
 start_epoch = len(history["epochs"]) + 1
