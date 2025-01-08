@@ -188,3 +188,41 @@ def load_target_data_asarray(indices, target_classes, path, tensor_shape_Y):
             source_catalogs[band] = np.empty((0, 0))
 
     return data_Y, source_catalogs, wcs_array
+
+
+# Function to create patches
+@tf.function
+def extract_patches(input_tensor, patch_size):
+    # Extract patches
+    patches = tf.image.extract_patches(
+        images=input_tensor,
+        sizes=[1, patch_size[0], patch_size[1], 1],
+        strides=[1, patch_size[0], patch_size[1], 1],
+        rates=[1, 1, 1, 1],
+        padding='VALID'
+    )
+    # Get dimensions
+    batch_size = tf.shape(input_tensor)[0]
+    num_patches_h = tf.shape(patches)[1]
+    num_patches_w = tf.shape(patches)[2]
+    num_patches = num_patches_h * num_patches_w
+    patch_dim = patch_size[0] * patch_size[1] * tf.shape(input_tensor)[-1]
+    
+    # Reshape to desired shape (Batchsize * n, patch_size[0], patch_size[1], C)
+    patches = tf.reshape(patches, [batch_size * num_patches, patch_size[0], patch_size[1], -1])
+    return patches
+
+# Function to reconstruct from patches
+@tf.function
+def reconstruct_from_patches(patches, original_shape, patch_size):
+    batch_size = original_shape[0]
+    patch_h, patch_w = patch_size
+    num_patches_h = original_shape[1] // patch_h
+    num_patches_w = original_shape[2] // patch_w
+    num_channels = original_shape[3]
+
+    # Reshape patches back to grid structure
+    patches = tf.reshape(patches, [batch_size, num_patches_h, num_patches_w, patch_h, patch_w, num_channels])
+    patches = tf.transpose(patches, perm=[0, 1, 3, 2, 4, 5])  # Rearrange to match original dimensions
+    reconstructed = tf.reshape(patches, [batch_size, original_shape[1], original_shape[2], num_channels])
+    return reconstructed

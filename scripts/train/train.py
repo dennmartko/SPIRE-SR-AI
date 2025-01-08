@@ -5,11 +5,13 @@ import tensorflow as tf
 from astropy.io import fits
 from matplotlib import pyplot as plt
 
-from scripts.utils.data_loader import create_dataset
+from scripts.utils.data_loader import create_dataset, extract_patches, reconstruct_from_patches
 from scripts.utils.file_utils import get_main_dir, create_model_ckpt_folder, create_log_file, printlog, log_epoch_details, load_training_history, save_training_history, create_model_results_subfolder
 from scripts.utils.plots import data_debug_plot, display_predictions, plot_history
 
 from models.architectures.UnetResnet34Tr import UnetResnet34Tr
+from models.architectures.SwinUnet import swin_unet_2d_base
+from models.architectures.Unet import build_unet 
 from loss_functions import non_adversarial_loss
 
 import yaml
@@ -63,9 +65,25 @@ model_name = config["model"]["model"]
 run_name = config["model"]["run_name"]
 model_weights_path, first_run = create_model_ckpt_folder(model_name, run_name)
 input_shape = config["model"]["input_shape"]
+output_shape = config["model"]["output_shape"]
 lr_params = config["training"]["polynomial_lr_schedule"]
 if model_name == "UnetResnet34Tr":
     model = UnetResnet34Tr(tuple(input_shape), "channels_last")
+elif model_name == "SwinUnet":
+    filter_num_begin = 128     # number of channels in the first downsampling block; it is also the number of embedded dimensions
+    depth = 4                  # the depth of SwinUNET; depth=4 means three down/upsampling levels and a bottom level 
+    stack_num_down = 2         # number of Swin Transformers per downsampling level
+    stack_num_up = 2           # number of Swin Transformers per upsampling level
+    patch_size = (8, 8)        # Extract 4-by-4 patches from the input image. Height and width of the patch must be equal.
+    num_heads = [2, 4, 4, 4]   # number of attention heads per down/upsampling level
+    window_size = [4, 2, 2, 2] # the size of attention window per down/upsampling level
+    num_mlp = 512              # number of MLP nodes within the Transformer
+    shift_window=True          # Apply window shifting, i.e., Swin-MSA
+    model = swin_unet_2d_base(tuple(input_shape), filter_num_begin, depth, stack_num_down, stack_num_up, 
+                      patch_size, num_heads, window_size, num_mlp, 
+                      shift_window=shift_window, name='swin_unet')
+elif model_name == "Unet":
+    model = build_unet(tuple(input_shape), "channels_last")
 else:
     raise("Other models not yet implemented")
 
@@ -122,27 +140,55 @@ epochs_without_improvement = 0 if not history["patience"] else history["patience
 patience = config["training"]["patience"]
 num_epochs = config["training"]["number_of_epochs"]
 start_epoch = len(history["epochs"]) + 1
-epochs = np.arange(start_epoch, num_epochs + 1, 1)
+
+# Early stopping (based on patience)
+if epochs_without_improvement >= patience:
+    printlog(f"{datetime.datetime.now()} - Early stopping after epoch {start_epoch}. No improvement for {patience} epochs.", log_file)
+    epochs = [] # We do not go into the training loop!
+else:
+    epochs = np.arange(start_epoch, num_epochs + 1, 1)
 
 # hyperparameter for the losses
 alpha = config["training"]["alpha"]
 
+# @tf.function(jit_compile=True)
+# def train_step(x, y, masks, alpha, model, optimizer):
+#     with tf.GradientTape() as tape:
+#         predictions = model(x, training=True)
+#         train_loss = non_adversarial_loss(predictions, y, masks, alpha)
+#     grads = tape.gradient(train_loss, model.trainable_variables)
+#     # grads, _ = tf.clip_by_global_norm(grads, 10.0)
+#     optimizer.apply_gradients(zip(grads, model.trainable_variables))
+#     return train_loss, tf.linalg.global_norm(grads)
+
 @tf.function(jit_compile=True)
-def train_step(x, y, masks, alpha, model, optimizer):
+def train_step(x, y, masks, alpha, model, optimizer, lambda_reg=1e-4):
     with tf.GradientTape() as tape:
         predictions = model(x, training=True)
         train_loss = non_adversarial_loss(predictions, y, masks, alpha)
-    grads = tape.gradient(train_loss, model.trainable_variables)
+        
+        # Compute L2 regularization loss
+        l2_loss = tf.add_n([tf.nn.l2_loss(var) for var in model.trainable_variables])
+        
+        # Add L2 loss to the training loss
+        total_loss = train_loss + lambda_reg * l2_loss
+
+    grads = tape.gradient(total_loss, model.trainable_variables)
+    # grads, _ = tf.clip_by_global_norm(grads, 10.0)
     optimizer.apply_gradients(zip(grads, model.trainable_variables))
-    return train_loss
+    return train_loss, tf.linalg.global_norm(grads)
+
 
 for epoch in tqdm(epochs, desc="Training model..."):
     total_train_loss = 0
+    total_batch_norm = 0
     for idx, (batch_x, batch_y) in enumerate(train_ds):
-        total_train_loss += train_step(batch_x, batch_y[:, :, :, :n_targets], batch_y[:, :, :, n_targets:], alpha, model, optimizer).numpy()
-
+        train_batch_loss, batch_norm = train_step(batch_x, batch_y[:, :, :, :n_targets], batch_y[:, :, :, n_targets:], alpha, model, optimizer)
+        total_train_loss += train_batch_loss.numpy()
+        total_batch_norm += batch_norm.numpy()
     # Compute average training loss for the epoch
     avg_train_loss = total_train_loss / train_num_batches.numpy()
+    avg_grad_norm = total_batch_norm / train_num_batches.numpy()
 
     # Validation loop
     total_val_loss = 0
@@ -162,7 +208,7 @@ for epoch in tqdm(epochs, desc="Training model..."):
     else:
         epochs_without_improvement+=1;
 
-    log_epoch_details(epoch, avg_train_loss, avg_val_loss, improved, log_file)
+    log_epoch_details(epoch, avg_train_loss, avg_val_loss, avg_grad_norm, improved, log_file)
 
     # Update the history
     history["epochs"].append(epoch)
@@ -184,4 +230,7 @@ for epoch in tqdm(epochs, desc="Training model..."):
     # Early stopping (based on patience)
     if epochs_without_improvement >= patience:
         printlog(f"{datetime.datetime.now()} - Early stopping after epoch {epoch}. No improvement for {patience} epochs.", log_file)
+        manager_ckpt.save()
+        save_training_history(history, training_history_file)
+        plot_history(history, os.path.join(training_results_dir, f"Training_History.jpg"))
         break;

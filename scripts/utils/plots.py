@@ -54,10 +54,10 @@ def display_predictions(inputs, targets, predictions, input_class_names, target_
             plt.grid(False)
             
             if cls in prediction_labels:
-                plt.imshow(predictions[i, :, :, c_pred], vmin=0)
+                plt.imshow(predictions[i, :, :, c_pred], vmin=0, vmax=10e-3)
                 c_pred += 1
             elif cls in target_class_names:
-                plt.imshow(targets[i, :, :, c_target], vmin=0)
+                plt.imshow(targets[i, :, :, c_target], vmin=0, vmax=10e-3)
                 c_target += 1
             else:  # cls is in input_class_names
                 plt.imshow(inputs[i, :, :, c_input], vmin=0)

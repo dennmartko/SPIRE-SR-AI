@@ -67,13 +67,14 @@ def create_log_file(model_name, run_name, first_run):
         open(log_file, 'w').close()
     return log_file
 
-def log_epoch_details(epoch, train_loss, val_loss, improved, log_file):
+def log_epoch_details(epoch, train_loss, val_loss, grad_norm, improved, log_file):
     """
     Log the training details of an epoch to a file.
 
     :param epoch: Current epoch number.
     :param train_loss: Training loss for the epoch.
     :param val_loss: Validation loss for the epoch.
+    :param grad_norm: Gradient norm for the epoch (debugging)
     :param improved: Boolean indicating if the model improved (based on validation loss).
     :param log_file: File to append the log.
     """
@@ -82,13 +83,13 @@ def log_epoch_details(epoch, train_loss, val_loss, improved, log_file):
     improvement_status = 'Improved' if improved else 'Not Improved'
     
     # Create the log entry string
-    log_entry = f"{datetime.datetime.now()} - Epoch {epoch} - Train Loss: {train_loss:.10e} - Val Loss: {val_loss:.10e} - {improvement_status}\n"
+    log_entry = f"{datetime.datetime.now()} - Epoch {epoch} - Train Loss: {train_loss:.3e} - Grad Norm: {grad_norm:.3e} - Val Loss: {val_loss:.3e} - {improvement_status}\n"
     
     # Append log to the file
     with open(log_file, 'a') as f:
         f.write(log_entry)
 
-    print(log_entry)  # Optionally print it to console as well for monitoring
+    print(log_entry)  # print it to console as well for monitoring
 
 def create_model_results_subfolder(model_name, run_name, purpose="training"):
     model_results_dir = os.path.join(get_main_dir(), "results", model_name)
