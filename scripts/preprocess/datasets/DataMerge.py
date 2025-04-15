@@ -82,11 +82,10 @@ class DataSplitter():
         print("Directory Cleaned!")
 
 
-base = r"/mnt/d/SPIRE-SR-AI/data/processed/50deg_shark_sides_spritz" #r"/scratch/p317470/SRHerschel500/data/processed/40deg_sides_spritz_dataset" #r"/mnt/d/SRHerschel500/data/processed/NADataset256x256"#r"/scratch/p317470/SRHerschel500/data/processed/HNDataset256x256" #r"/mnt/d/SRHerschel500/data/processed/tmpDataset256x256" #r"/scratch-shared/dkoopmans/Dataset256x256"
-SHARK = [f"SHARK_{i+1}" for i in range(0, 12)] #[f"SHARK_{}" for i in range(4)]
-SIDES = [f"SIDES_{i+1}" for i in range(0, 12)]
-SPRITZ = [f"SPRITZ"]
-datasets = SHARK + SIDES + SPRITZ # Prefixes of the datamaps. Check the code for "fname" for details on standard formatting of files. CTRL + F --> "fname"
+base = "/mnt/g/data/PhD Projects/SR/120deg2_shark_sides" #r"/scratch-shared/dkoopmans/120deg2_shark_sides"
+SHARK = [f"SHARK_{i+1}" for i in range(0, 30)]
+SIDES = [f"SIDES_{i+1}" for i in range(0, 30)]
+datasets = SHARK + SIDES # Prefixes of the datamaps. Check the code for "fname" for details on standard formatting of files. CTRL + F --> "fname"
 
 listdir_to_datasets = [os.path.join(base, dataset) for dataset in datasets]
 

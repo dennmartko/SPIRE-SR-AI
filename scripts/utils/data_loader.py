@@ -48,7 +48,7 @@ def match_input_output(directory, input_classes, target_classes, include_mask):
     input_pairs = []
     output_list = []
 
-    for i in range(len(output_files[target_classes[0]])):  # Match based on the first target class size
+    for i in range(int(len(output_files[target_classes[0]])*0.5)):  # Match based on the first target class size
         matched_inputs = [input_files[cls][i] for cls in input_classes]
         matched_outputs = [output_files[cls][i] for cls in target_classes]
 
@@ -104,7 +104,7 @@ def create_dataset(directory, input_class_names, target_class_names, batch_size,
     
     # Define the dataset's structure with TensorSpec
     input_spec = tf.TensorSpec(shape=(256, 256, len(input_class_names)), dtype=tf.float32)
-    output_spec = tf.TensorSpec(shape=(256, 256, len(target_class_names)*2), dtype=tf.float32)
+    output_spec = tf.TensorSpec(shape=(256, 256, len(target_class_names)*2), dtype=tf.float32) # Factor 2 because each target class has a mask
     dataset = dataset.map(
         lambda inputs, output: (tf.ensure_shape(inputs, input_spec.shape), tf.ensure_shape(output, output_spec.shape))
     )

@@ -114,7 +114,7 @@ def printlog(message, log_file):
 
 def save_input_image_with_header_to_fits(img_data, img_ID, cl, cutout_wcs, save_dir):
     hdul = fits.HDUList([fits.PrimaryHDU(img_data.astype(np.float32), header=cutout_wcs.to_header())])
-    # Store the data (and table) to the fits file
+    # Store the data to the fits file
     hdul.writeto(f"{os.path.join(save_dir, cl)}" + f"/{cl}_{img_ID}.fits", overwrite=True)
     return 1 # Indicate successful disk save
 
@@ -123,29 +123,16 @@ def save_target_image_catalog_to_fits(img_data, img_ID, cl, pix_scale, fwhm, cut
     sources = sources[sources["flags"] <= 1]
 
     # Training code will never use the 'ra' and 'dec' source coordinates of the training data
-    source_df_cutout = pd.DataFrame(columns=['S500SR', 'xpix', 'ypix', 'ra', 'dec'] if purpose != 'Training' else ['S500SR', 'xpix', 'ypix'])
+    source_df_cutout = pd.DataFrame(columns=['xpix', 'ypix'])
 
     # Potential errors may arise --> empty array if no sources are detected in cutout
     if sources['x_fit'] is None:
         source_df_cutout['xpix'] = np.array([], dtype=np.float32)
         source_df_cutout['ypix'] = np.array([], dtype=np.float32)
-        if purpose != 'Training':
-            source_df_cutout['ra'] = np.array([], dtype=np.float32)
-            source_df_cutout['dec'] = np.array([], dtype=np.float32)
-        source_df_cutout['S500SR'] = np.array([], dtype=np.float32)
+
     else:
         source_df_cutout['xpix'] = np.array(sources['x_fit'], dtype=np.float32)
         source_df_cutout['ypix'] = np.array(sources['y_fit'], dtype=np.float32)
-        if purpose != 'Training':
-            tr_target_pix = np.transpose(np.vstack((sources["x_fit"], sources["y_fit"])))
-            tr_target_world = cutout_wcs.wcs_pix2world(tr_target_pix, 0)
-            source_df_cutout['ra'] = np.array(tr_target_world[:, 0], dtype=np.float32)
-            source_df_cutout['dec'] = np.array(tr_target_world[:, 1], dtype=np.float32)
-        source_df_cutout['S500SR'] = np.array(sources['flux_fit'], dtype=np.float32)
-
-    # Create FITS table from DataFrame
-    cols = fits.ColDefs([fits.Column(name=col, format='E', array=source_df_cutout[col].values) for col in source_df_cutout.columns])
-    Table_hdu = fits.TableHDU.from_columns(cols)
 
     # Create primary HDU
     primary_hdu = fits.PrimaryHDU(img_data.astype(np.float32), header=cutout_wcs.to_header())
@@ -155,7 +142,7 @@ def save_target_image_catalog_to_fits(img_data, img_ID, cl, pix_scale, fwhm, cut
     mask_hdu = fits.PrimaryHDU(img_mask.astype(np.float32), header=cutout_wcs.to_header())
 
     # Write to FITS file
-    hdul = fits.HDUList([primary_hdu, Table_hdu])
+    hdul = fits.HDUList([primary_hdu])
     hdul.writeto(f"{os.path.join(save_dir, cl)}" + f"/{cl}_{img_ID}.fits", overwrite=True)
     if purpose != "Test":
         cl_mask = cl + "_mask"

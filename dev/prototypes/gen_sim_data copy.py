@@ -35,9 +35,9 @@ class Config:
     class_types = ["input", "input", "input", "input", "target"]
 
     # Paths
-    parent_out_dir = r"/mnt/g/data/PhD Projects/SR" #r"/scratch/p317470/SRHerschel500/data/processed" # r"/scratch/p317470/SRHerschel500/data/processed" #r"/scratch-shared/dkoopmans" # Output directory of Data, change if needed to
+    parent_out_dir = r"/scratch-shared/dkoopmans" #r"/mnt/g/data/PhD Projects/SR" #r"/scratch/p317470/SRHerschel500/data/processed" # r"/scratch/p317470/SRHerschel500/data/processed" #r"/scratch-shared/dkoopmans" # Output directory of Data, change if needed to
     dataset_dir_name = "120deg2_shark_sides" # Directory name of generated dataset
-    dir_to_data_maps = r"/mnt/g/data/PhD Projects/SR/sim_datamaps" #r"/scratch/p317470/SRHerschel500/data/raw/sim datamaps" # #r"/scratch/p317470/SRHerschel500/data/raw/sim datamaps" #r"/scratch-shared/dkoopmans/sim_datamaps" # Path to simulation datamaps
+    dir_to_data_maps = r"/scratch-shared/dkoopmans/sim_datamaps" #r"/mnt/g/data/PhD Projects/SR/sim_datamaps" #r"/scratch/p317470/SRHerschel500/data/raw/sim datamaps" # #r"/scratch/p317470/SRHerschel500/data/raw/sim datamaps" #r"/scratch-shared/dkoopmans/sim_datamaps" # Path to simulation datamaps
 
     # Instrument information
     instrument_prefixes = ["MIPS24", "SPIRE250", "SPIRE350", "SPIRE500", "SR_SPIRE500"] # prefixes used in filenames of datamaps
@@ -55,8 +55,8 @@ class Config:
     # By default, max 6 cores should be used for interpolation and can not be changed. This is due to the high memory usage.
     # However, on HPCs, this can be changed
     # Here, N_CPU indicates number of cores to be used for cutout generation: I/O (FITs saving) and source pre-detection.
-    N_CPU = 12 # Number of cores available for multi processing, Usually TOTAL CORES - 1
-    N_CPU_INTERP = 5 # Number of cores for interpolation, CAUTION: memory explodes with the number of cores
+    N_CPU = 30 # Number of cores available for multi processing, Usually TOTAL CORES - 1
+    N_CPU_INTERP = 8 # Number of cores for interpolation, CAUTION: memory explodes with the number of cores
 
     # # Do not change!
     # CRVAL_offset1 = 0.64
@@ -155,17 +155,6 @@ class ProcessDataSet():
         # Compute the corresponding ra and dec coordinates
         grid_ra, grid_dec = w.all_pix2world(grid_x, grid_y, 0)
 
-        fig_centers = plt.figure(figsize=(8, 8))
-        ax_centers = fig_centers.add_subplot(111, projection=w)
-        # Display the datamap in grayscale as a background
-        ax_centers.imshow(hdu[0].data, origin='lower', cmap='gray', alpha=0.7)
-        # Overplot the cutout center positions as red circles (using world coordinates)
-        ax_centers.scatter(grid_ra.flatten(), grid_dec.flatten(), s=50, edgecolor='red', facecolor='none', transform=ax_centers.get_transform('world'))
-        ax_centers.set_title("Cutout Centers on the Sky")
-        # Save the figure in the figures directory defined in the object
-        plt.savefig(os.path.join(self.fig_path, "cutout_centers_overplot.png"))
-        plt.close(fig_centers)
-
         # Create class-wide list containing the Skycoordinates of the cutouts
         self.cutout_centers = [SkyCoord(ra*u.degree, dec*u.degree, frame="fk5") for ra, dec in zip(grid_ra.flatten(), grid_dec.flatten())]
 
@@ -207,7 +196,6 @@ class ProcessDataSet():
         w_interp.wcs.cdelt = [np.sign(original_header["CDELT1"]) * interp_pixscale/3600, np.sign(original_header["CDELT2"]) * interp_pixscale/3600]
         w_interp.wcs.ctype = ["RA---TAN", "DEC--TAN"]
         w_interp.wcs.cunit = [u.deg, u.deg]
-
 
         # Interpolation using new header WCS
         interp_data = reproject_exact(

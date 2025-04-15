@@ -5,7 +5,7 @@ import tensorflow as tf
 from astropy.io import fits
 from matplotlib import pyplot as plt
 
-from scripts.utils.data_loader import create_dataset, extract_patches, reconstruct_from_patches
+from scripts.utils.data_loader import create_dataset, generate_interpolated_noise, extract_patches, reconstruct_from_patches
 from scripts.utils.file_utils import get_main_dir, create_model_ckpt_folder, create_log_file, printlog, log_epoch_details, load_training_history, save_training_history, create_model_results_subfolder
 from scripts.utils.plots import data_debug_plot, display_predictions, plot_history
 
@@ -46,6 +46,34 @@ VAL_DIR = os.path.join(DS_DIR, "Validation")
 train_ds, train_num_batches = create_dataset(TRAIN_DIR, input_class_names, target_class_names, BATCH_SIZE, is_training=True)
 val_ds, val_num_batches = create_dataset(VAL_DIR, input_class_names, target_class_names, BATCH_SIZE*2, is_training=False) # Inference batch_size can always be much larger
 
+# Define parameters
+interp_params = {
+    '24': {'pixscale': 1.2, 'noise_lvl': 14e-6},
+    '250': {'pixscale': 6.0, 'noise_lvl': 2e-3},
+    '350': {'pixscale': 8.33, 'noise_lvl': 2e-3},
+    '500': {'pixscale': 12.0, 'noise_lvl': 2e-3},
+}
+
+# Generate interpolated noise for the input images. Uses (safe) multiprocessing
+interpolated_noise = generate_interpolated_noise(input_class_names, interp_params, samples=50, img_size=256)
+
+def add_noise(input_class_names, interpolated_noise, batch):
+    batch = tf.convert_to_tensor(batch, dtype=tf.float32)  # Convert batch to a TensorFlow tensor
+
+    for i, name in enumerate(input_class_names):
+        # Generate random indices for noise sampling
+        rnd_indices = np.random.randint(0, interpolated_noise[name].shape[0], batch.shape[0])
+        
+        # Fetch noise and convert to TensorFlow tensor
+        noise = tf.convert_to_tensor(interpolated_noise[name][rnd_indices], dtype=tf.float32)
+        
+        # Add noise to the respective channel without in-place modification
+        batch = tf.concat([batch[:, :, :, :i], 
+                           batch[:, :, :, i:i+1] + noise[..., None], 
+                           batch[:, :, :, i+1:]], axis=-1)
+    
+    return batch
+
 # # Normalizer
 # train_ds_norm = train_ds.map(lambda x, y: x)
 # normalizer = tf.keras.layers.Normalization()
@@ -57,8 +85,13 @@ val_ds, val_num_batches = create_dataset(VAL_DIR, input_class_names, target_clas
 # Plot an image sample for debugging purposes
 inputs, labels = next(iter(val_ds.take(1)))
 
+inputs = add_noise(input_class_names, interpolated_noise, inputs)
+inputs2 = add_noise(input_class_names, interpolated_noise, np.zeros_like(inputs))
+
 save = os.path.join(get_main_dir(), "images/data_samples.jpg")
+save2 = os.path.join(get_main_dir(), "images/noise_samples.jpg")
 data_debug_plot(inputs, labels, input_class_names, target_class_names, save)
+data_debug_plot(inputs2, labels, input_class_names, target_class_names, save2)
 
 # Get model
 model_name = config["model"]["model"]
@@ -133,7 +166,7 @@ else:
     # This ensures that training can always be restarted.
     save_training_history(history, training_history_file)
 
-# Training configuration
+# Training loop
 best_val_loss = np.min(history["val_loss"]) if history["val_loss"] else float('inf')
 epochs_without_improvement = 0 if not history["patience"] else history["patience"][-1]
 patience = config["training"]["patience"]
@@ -161,17 +194,23 @@ alpha = config["training"]["alpha"]
 #     return train_loss, tf.linalg.global_norm(grads)
 
 @tf.function(jit_compile=True)
-def train_step(x, y, masks, alpha, model, optimizer):
+def train_step(x, y, masks, alpha, model, optimizer, lambda_reg=1e-4):
     with tf.GradientTape() as tape:
         predictions = model(x, training=True)
         train_loss = non_adversarial_loss(predictions, y, masks, alpha)
+        
+        # Compute L2 regularization loss
+        l2_loss = tf.add_n([tf.nn.l2_loss(var) for var in model.trainable_variables])
+        
+        # Add L2 loss to the training loss
+        total_loss = train_loss + lambda_reg * l2_loss
 
-    grads = tape.gradient(train_loss, model.trainable_variables)
+    grads = tape.gradient(total_loss, model.trainable_variables)
     # grads, _ = tf.clip_by_global_norm(grads, 10.0)
     optimizer.apply_gradients(zip(grads, model.trainable_variables))
     return train_loss, tf.linalg.global_norm(grads)
 
-# Training Loop
+
 for epoch in tqdm(epochs, desc="Training model..."):
     total_train_loss = 0
     total_batch_norm = 0

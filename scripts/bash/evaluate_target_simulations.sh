@@ -15,7 +15,7 @@ ID_LIST=(1 2 3 4 5 6 7)  # Uncomment to dynamically create run_names
 # Generate RUN_NAMES dynamically using ID_LIST
 RUN_NAMES=()
 for ID in "${ID_LIST[@]}"; do
-    RUN_NAMES+=("new_finetune_run_${ID}")
+    RUN_NAMES+=("second_finetune_run_${ID}")
 done
 
 # Loop over all RUN_NAMES
