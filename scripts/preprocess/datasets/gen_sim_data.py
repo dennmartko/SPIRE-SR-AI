@@ -35,8 +35,8 @@ class Config:
     class_types = ["input", "input", "input", "input", "target"]
 
     # Paths
-    parent_out_dir = r"/mnt/g/data/PhD Projects/SR" #r"/scratch/p317470/SRHerschel500/data/processed" # r"/scratch/p317470/SRHerschel500/data/processed" #r"/scratch-shared/dkoopmans" # Output directory of Data, change if needed to
-    dataset_dir_name = "120deg2_shark_sides" # Directory name of generated dataset
+    parent_out_dir = r"/mnt/d/SPIRE-SR-AI/data/processed" #r"/scratch/p317470/SRHerschel500/data/processed" # r"/scratch/p317470/SRHerschel500/data/processed" #r"/scratch-shared/dkoopmans" # Output directory of Data, change if needed to
+    dataset_dir_name = "dummy_set" #"120deg2_shark_sides" # Directory name of generated dataset
     dir_to_data_maps = r"/mnt/g/data/PhD Projects/SR/sim_datamaps" #r"/scratch/p317470/SRHerschel500/data/raw/sim datamaps" # #r"/scratch/p317470/SRHerschel500/data/raw/sim datamaps" #r"/scratch-shared/dkoopmans/sim_datamaps" # Path to simulation datamaps
 
     # Instrument information
@@ -412,8 +412,8 @@ class ProcessDataSet():
 ##########################
 ###  CODE IS RUN HERE ####
 ##########################
-SHARK = [f"SHARK_{i+1}" for i in range(0, 30)]
-SIDES = [f"SIDES_{i+1}" for i in range(0, 30)]
+SHARK = [f"SHARK_{i+1}" for i in range(0, 2)]
+SIDES = [f"SIDES_{i+1}" for i in range(0, 2)]
 #SPRITZ = [f"SPRITZ"]
 prefixes = SIDES + SHARK # Prefixes of the datamaps. Check the code for "fname" for details on standard formatting of files. CTRL + F --> "fname"
 

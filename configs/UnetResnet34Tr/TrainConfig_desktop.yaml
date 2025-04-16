@@ -14,6 +14,6 @@ training:
 
 data:
   # Data specific settings, change to needs.
-  data_path: "/mnt/d/SPIRE-SR-AI/data/processed/50deg_shark_sides_spritz"
+  data_path: "/mnt/d/SPIRE-SR-AI/data/processed/dummy_set"
   input: ["24", "250", "350", "500"]  # class names
   target: ["500SR"]  # class names

@@ -5,7 +5,7 @@ import tensorflow as tf
 from astropy.io import fits
 from matplotlib import pyplot as plt
 
-from scripts.utils.data_loader import create_dataset, extract_patches, reconstruct_from_patches
+from scripts.utils.data_loader import create_dataset
 from scripts.utils.file_utils import get_main_dir, create_model_ckpt_folder, create_log_file, printlog, log_epoch_details, load_training_history, save_training_history, create_model_results_subfolder
 from scripts.utils.plots import data_debug_plot, display_predictions, plot_history
 
@@ -44,7 +44,9 @@ TRAIN_DIR = os.path.join(DS_DIR, "Train")
 VAL_DIR = os.path.join(DS_DIR, "Validation")
 
 train_ds, train_num_batches = create_dataset(TRAIN_DIR, input_class_names, target_class_names, BATCH_SIZE, is_training=True)
-val_ds, val_num_batches = create_dataset(VAL_DIR, input_class_names, target_class_names, BATCH_SIZE*2, is_training=False) # Inference batch_size can always be much larger
+val_ds, val_num_batches = create_dataset(VAL_DIR, input_class_names, target_class_names, BATCH_SIZE, is_training=False) # Inference batch_size can always be much larger
+print("NUMBER TRAIN BATCHES: ", train_num_batches)
+print("NUMBER VAL BATCHES: ", val_num_batches)
 
 # # Normalizer
 # train_ds_norm = train_ds.map(lambda x, y: x)
@@ -171,6 +173,10 @@ def train_step(x, y, masks, alpha, model, optimizer):
     optimizer.apply_gradients(zip(grads, model.trainable_variables))
     return train_loss, tf.linalg.global_norm(grads)
 
+@tf.function
+def inference_step(x):
+    return model(x, training=False)
+
 # Training Loop
 for epoch in tqdm(epochs, desc="Training model..."):
     total_train_loss = 0
@@ -186,7 +192,7 @@ for epoch in tqdm(epochs, desc="Training model..."):
     # Validation loop
     total_val_loss = 0
     for batch_x, batch_y in val_ds:
-        predictions = model(batch_x, training=False)
+        predictions = inference_step(batch_x)
         val_loss = non_adversarial_loss(predictions, batch_y[:, :, :, :n_targets], batch_y[:, :, :, n_targets:], alpha)
         total_val_loss += val_loss.numpy()
 

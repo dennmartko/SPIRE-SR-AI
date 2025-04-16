@@ -81,6 +81,8 @@ def augment(inputs, labels):
 def create_dataset(directory, input_class_names, target_class_names, batch_size, is_training=True, include_mask=True):
     """Creates a tf.data.Dataset for given directory."""
     input_pairs, output_list = match_input_output(directory, input_class_names, target_class_names, include_mask)
+
+    print(len(input_pairs), len(output_list))
     # Create TensorFlow Dataset
     file_ds = tf.data.Dataset.from_tensor_slices((input_pairs, output_list))
     if is_training:

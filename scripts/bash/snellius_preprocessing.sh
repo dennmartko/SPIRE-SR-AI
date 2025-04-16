@@ -49,6 +49,7 @@ fi
 module load 2023
 module load TensorFlow/2.15.1-foss-2023a-CUDA-12.1.1
 
+
 # Run preprocessing scripts
 python "$SR_LIB_PATH/scripts/preprocess/datasets/gen_sim_data.py"
 python "$SR_LIB_PATH/scripts/preprocess/datasets/DataMerge.py"
