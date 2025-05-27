@@ -38,7 +38,7 @@ from scripts.utils.evaluation_plots import (
 )
 
 from scripts.utils.source_extraction_utils import (
-    construct_SR_source_catalog
+    construct_SR_source_catalog_deprecated
 )
 from models.architectures.UnetResnet34Tr import UnetResnet34Tr
 
@@ -162,7 +162,7 @@ def main():
 
         # Our first objective is to extract the sources from the super-resolved image
         ## Compute the SR test catalog using multi-processing
-        SR_cat = construct_SR_source_catalog(target_cl, sr_config[target_cl]["FWHM"], sr_config[target_cl]["flux_threshold"], predictions, wcs_arr, N_CPU=config["sys_config"]["n_cpu_cores"])
+        SR_cat = construct_SR_source_catalog_deprecated(target_cl, sr_config[target_cl]["FWHM"], sr_config[target_cl]["flux_threshold"], predictions, wcs_arr, N_CPU=config["sys_config"]["n_cpu_cores"])
         print(f"{datetime.datetime.now()} - SR catalog for band: {target_cl[:-2]} constructed!")
 
         # Flux reproduction plots (against measured extracted target sources!)

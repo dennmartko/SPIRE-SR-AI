@@ -544,7 +544,7 @@ def swin_unet_2d_base(input_size, filter_num_begin, depth, stack_num_down, stack
     
     1. Input image --> a sequence of patches --> tokenize these patches
     2. Downsampling: swin-transformer --> patch merging (pooling)
-    3. Upsampling: concatenate --> swin-transfprmer --> patch expanding (unpooling)
+    3. Upsampling: concatenate --> swin-transformer --> patch expanding (unpooling)
     4. Model head
     
     '''
@@ -656,6 +656,7 @@ def swin_unet_2d_base(input_size, filter_num_begin, depth, stack_num_down, stack
                                            upsample_rate=patch_size[0], 
                                            return_vector=False)(X)
     
-    out = Conv2D(input_tensor.shape[-1], kernel_size=1, use_bias=False, padding='same')(X)
+    # out = Conv2D(input_tensor.shape[-1], kernel_size=1, use_bias=False, padding='same')(X)
+    out = Conv2D(1, kernel_size=1, use_bias=False, padding='same')(X)
     
     return tf.keras.Model(input_tensor, out)

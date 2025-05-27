@@ -1,0 +1,19 @@
+model:
+  # Model specific settings, do not change!
+  model: "SwinUnet"  # Should be the same name as parent config folder
+  run_name: "SwinUnet2025Apr22"  # Such that the run can be recognized, i.e., start date
+  input_shape: [256, 256, 4]
+  output_shape: [256, 256, 1]
+
+training:
+  polynomial_lr_schedule: [0.002, 0.00001, 100, 2]  # initial lr, end lr, epochs, power
+  batch_size: 48
+  number_of_epochs: 5000  # Maximum number of epochs
+  patience: 250  # After how many epochs training stops with no improvement in val loss
+  alpha: .999 # hyperparameter for the losses
+
+data:
+  # Data specific settings, change to needs.
+  data_path: "/home/dkoopmans/SPIRE-SR-AI/data/processed/120deg2_shark_sides" #"/mnt/d/SPIRE-SR-AI/data/processed/50deg_shark_sides_spritz"
+  input: ["24", "250", "350", "500"]  # class names
+  target: ["500SR"]  # class names

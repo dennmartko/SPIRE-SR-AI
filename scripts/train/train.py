@@ -11,7 +11,7 @@ from scripts.utils.plots import data_debug_plot, display_predictions, plot_histo
 
 from models.architectures.UnetResnet34Tr import UnetResnet34Tr
 from models.architectures.SwinUnet import swin_unet_2d_base
-from models.architectures.Unet import build_unet 
+from models.architectures.Unet import build_unet
 from loss_functions import non_adversarial_loss
 
 import yaml
@@ -44,9 +44,7 @@ TRAIN_DIR = os.path.join(DS_DIR, "Train")
 VAL_DIR = os.path.join(DS_DIR, "Validation")
 
 train_ds, train_num_batches = create_dataset(TRAIN_DIR, input_class_names, target_class_names, BATCH_SIZE, is_training=True)
-val_ds, val_num_batches = create_dataset(VAL_DIR, input_class_names, target_class_names, BATCH_SIZE, is_training=False) # Inference batch_size can always be much larger
-print("NUMBER TRAIN BATCHES: ", train_num_batches)
-print("NUMBER VAL BATCHES: ", val_num_batches)
+val_ds, val_num_batches = create_dataset(VAL_DIR, input_class_names, target_class_names, BATCH_SIZE*2, is_training=False) # Inference batch_size can always be much larger
 
 # # Normalizer
 # train_ds_norm = train_ds.map(lambda x, y: x)
@@ -74,11 +72,11 @@ if model_name == "UnetResnet34Tr":
 elif model_name == "SwinUnet":
     filter_num_begin = 128     # number of channels in the first downsampling block; it is also the number of embedded dimensions
     depth = 4                  # the depth of SwinUNET; depth=4 means three down/upsampling levels and a bottom level 
-    stack_num_down = 2         # number of Swin Transformers per downsampling level
-    stack_num_up = 2           # number of Swin Transformers per upsampling level
+    stack_num_down = 4         # number of Swin Transformers per downsampling level
+    stack_num_up = 4           # number of Swin Transformers per upsampling level
     patch_size = (8, 8)        # Extract 4-by-4 patches from the input image. Height and width of the patch must be equal.
     num_heads = [2, 4, 4, 4]   # number of attention heads per down/upsampling level
-    window_size = [4, 2, 2, 2] # the size of attention window per down/upsampling level
+    window_size = [8, 4, 4, 4] # the size of attention window per down/upsampling level
     num_mlp = 512              # number of MLP nodes within the Transformer
     shift_window=True          # Apply window shifting, i.e., Swin-MSA
     model = swin_unet_2d_base(tuple(input_shape), filter_num_begin, depth, stack_num_down, stack_num_up, 
@@ -119,6 +117,7 @@ manager_ckpt = tf.train.CheckpointManager(ckpt, os.path.join(model_weights_path,
 
 training_history_file = os.path.join(model_weights_path, "history.json")
 
+
 if not first_run:
     manager_ckpt.restore_or_initialize()
     printlog(f"{datetime.datetime.now()} - Found checkpoint folder: {model_weights_path}!", log_file)
@@ -135,7 +134,7 @@ else:
     # This ensures that training can always be restarted.
     save_training_history(history, training_history_file)
 
-# Training configuration
+# Training loop
 best_val_loss = np.min(history["val_loss"]) if history["val_loss"] else float('inf')
 epochs_without_improvement = 0 if not history["patience"] else history["patience"][-1]
 patience = config["training"]["patience"]
@@ -152,32 +151,16 @@ else:
 # hyperparameter for the losses
 alpha = config["training"]["alpha"]
 
-# @tf.function(jit_compile=True)
-# def train_step(x, y, masks, alpha, model, optimizer):
-#     with tf.GradientTape() as tape:
-#         predictions = model(x, training=True)
-#         train_loss = non_adversarial_loss(predictions, y, masks, alpha)
-#     grads = tape.gradient(train_loss, model.trainable_variables)
-#     # grads, _ = tf.clip_by_global_norm(grads, 10.0)
-#     optimizer.apply_gradients(zip(grads, model.trainable_variables))
-#     return train_loss, tf.linalg.global_norm(grads)
-
 @tf.function(jit_compile=True)
 def train_step(x, y, masks, alpha, model, optimizer):
     with tf.GradientTape() as tape:
         predictions = model(x, training=True)
         train_loss = non_adversarial_loss(predictions, y, masks, alpha)
-
     grads = tape.gradient(train_loss, model.trainable_variables)
     # grads, _ = tf.clip_by_global_norm(grads, 10.0)
     optimizer.apply_gradients(zip(grads, model.trainable_variables))
     return train_loss, tf.linalg.global_norm(grads)
 
-@tf.function
-def inference_step(x):
-    return model(x, training=False)
-
-# Training Loop
 for epoch in tqdm(epochs, desc="Training model..."):
     total_train_loss = 0
     total_batch_norm = 0
@@ -192,7 +175,7 @@ for epoch in tqdm(epochs, desc="Training model..."):
     # Validation loop
     total_val_loss = 0
     for batch_x, batch_y in val_ds:
-        predictions = inference_step(batch_x)
+        predictions = model(batch_x, training=False)
         val_loss = non_adversarial_loss(predictions, batch_y[:, :, :, :n_targets], batch_y[:, :, :, n_targets:], alpha)
         total_val_loss += val_loss.numpy()
 

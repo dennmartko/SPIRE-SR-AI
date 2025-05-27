@@ -10,7 +10,7 @@ def UnetResnet34Tr(shape, data_format, C1=64, multipliers=(1, 2, 4, 8)):
 
     deconv_params = lambda n, pad, regularize_bool: {'filters':n*C1, 'kernel_initializer':tf.keras.initializers.HeUniform, 'bias_initializer':'zeros', 'use_bias':True, 'padding':'same', 'data_format': data_format, 'kernel_regularizer':'l1_l2' if regularize_bool else None}
     
-    bn_params = {'momentum':0.9, 'epsilon':1e-6, 'axis':axis}
+    bn_params = {'momentum':0.9, 'epsilon':1e-5, 'axis':axis}
     drop_params = lambda d: {'rate':d}
 
     # Model Blocks

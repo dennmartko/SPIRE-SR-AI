@@ -1,0 +1,21 @@
+model:
+  # Model specific settings, do not change!
+  model: "UnetResnet34Tr"  # Should be the same name as parent config folder
+  run_name: "OldModel"  # Such that the run can be recognized, i.e., start date
+  input_shape: [256, 256, 4]
+  output_shape: [256, 256, 1]
+
+sys_config:
+  n_cpu_cores: 14 # Number of CPU cores to use in parallel processing
+
+data:
+  # Data specific settings, change to needs.
+  # SR catalog path is inferred from model and run name
+  # For super-resolving all SPIRE bands, variables can be changed to a list or the catalogs contain multiple columns
+  test_dataset_path: "/mnt/g/data/PhD Projects/SR/120deg2_shark_sides/Test"
+  input_catalog_path: "/mnt/d/SPIRE-SR-AI/data/raw/catalogs/sim/120_deg2_shark_sides_input_test_catalog.fits"
+  native_catalog_path: "/mnt/d/SPIRE-SR-AI/data/raw/catalogs/sim/SPIRE500_native_catalog.fits"
+  target_catalog_path: "/mnt/d/SPIRE-SR-AI/data/raw/catalogs/sim/500SR_target_catalog.fits"
+  test_batch_size: 32 # Batch size for test data, can be larger than train batch size
+  input: ["24", "250", "350", "500"]  # class names
+  target: ["500SR"]  # class names

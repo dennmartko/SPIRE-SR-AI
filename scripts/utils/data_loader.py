@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import os
+import re
 from astropy.io import fits
 from glob import glob
 from astropy.wcs import WCS
@@ -48,7 +49,7 @@ def match_input_output(directory, input_classes, target_classes, include_mask):
     input_pairs = []
     output_list = []
 
-    for i in range(int(len(output_files[target_classes[0]])*0.5)):  # Match based on the first target class size
+    for i in range(len(output_files[target_classes[0]])):  # Match based on the first target class size
         matched_inputs = [input_files[cls][i] for cls in input_classes]
         matched_outputs = [output_files[cls][i] for cls in target_classes]
 
@@ -78,11 +79,19 @@ def augment(inputs, labels):
     
     return inputs, labels
 
+def augment_tf(data):
+    # Apply random flip
+    data = random_flip(data)
+
+    # Apply random 90-degree rotations
+    num_rotations = tf.random.uniform([], minval=0, maxval=4, dtype=tf.int32)
+    data = tf.image.rot90(data, k=num_rotations)
+    return data
+
 def create_dataset(directory, input_class_names, target_class_names, batch_size, is_training=True, include_mask=True):
     """Creates a tf.data.Dataset for given directory."""
     input_pairs, output_list = match_input_output(directory, input_class_names, target_class_names, include_mask)
 
-    print(len(input_pairs), len(output_list))
     # Create TensorFlow Dataset
     file_ds = tf.data.Dataset.from_tensor_slices((input_pairs, output_list))
     if is_training:
@@ -123,7 +132,83 @@ def create_dataset(directory, input_class_names, target_class_names, batch_size,
     #     dataset = dataset.repeat()
     return dataset, size
 
-def load_input_data_asarray(indices, classes, path, tensor_shape_X):
+
+@tf.function
+def _load_and_stack(*paths):
+    def load_fits(fp):
+        fp = fp.numpy().decode("utf-8")
+        with fits.open(fp) as hdul:
+            return np.expand_dims(hdul[0].data.astype(np.float32), axis=-1)
+
+    imgs = []
+    for fp in paths:
+        img = tf.py_function(load_fits, [fp], tf.float32)
+        img.set_shape([256, 256, 1])
+        imgs.append(img)
+
+    img = tf.concat(imgs, axis=-1)  # Expected shape: [256, 256, num_channels]
+    return img
+
+def split_input_labels(tensor, input_classes, target_classes):
+    """
+    Splits a concatenated tensor into inputs and labels.
+    Assumes that the tensor's last dimension is ordered with input channels first
+    and then label channels (which may include auxiliary channels like masks).
+
+    Parameters:
+    - tensor: A tf.Tensor of shape (..., channels) (may include a batch dimension).
+    - input_classes: List of input class names.
+    - target_classes: List of target class names.
+      (For example, if each target class provides two channels, the remainder channels are split accordingly.)
+
+    Returns:
+    - inputs: Sub-tensor corresponding to the input channels.
+    - labels: Sub-tensor corresponding to the label channels.
+    """
+    input_channels = len(input_classes)
+    # The rest channels are considered labels.
+    inputs = tensor[..., :input_channels]
+    labels = tensor[..., input_channels:]
+    return inputs, labels
+
+def create_dataset_tf(directory, input_classes, target_classes, batch_size, is_training=True):
+    # Make file‐list Datasets, sorted so that channels align
+    classes = input_classes + target_classes + [target_cl + "_mask" for target_cl in target_classes]
+
+    datasets = {}
+    for cls in classes:
+        # get all .fits files for this class
+        pattern = f"{directory}/{cls}/*fits"
+        files = glob(pattern)
+        # sort on the numeric fileID extracted from filenames like "class_fileID.fits"
+        files.sort(key=lambda fp: int(re.search(r"_(\d+)\.fits$", fp).group(1)))
+        datasets[cls] = tf.data.Dataset.from_tensor_slices(files)
+
+    files_ds = tf.data.Dataset.zip(tuple(datasets[cl] for cl in classes))
+
+    if is_training:
+        dataset = (
+            files_ds
+            .map(_load_and_stack, num_parallel_calls=tf.data.AUTOTUNE)
+            .cache()
+            .shuffle(1024)
+            .map(augment_tf, num_parallel_calls=tf.data.AUTOTUNE)
+            .batch(batch_size)
+            .prefetch(tf.data.AUTOTUNE)
+        )
+    else:
+        dataset = (
+            files_ds
+            .map(_load_and_stack, num_parallel_calls=tf.data.AUTOTUNE)
+            .cache()
+            .batch(batch_size)
+            .prefetch(tf.data.AUTOTUNE)
+        )
+
+    return dataset, dataset.cardinality()
+
+
+def load_input_data_asarray(indices, classes, path, tensor_shape_X, progress=None):
     """
     Loads input data into a numpy array from a directory containing the class FITS files.
     
@@ -136,17 +221,22 @@ def load_input_data_asarray(indices, classes, path, tensor_shape_X):
     Returns:
     - data_X: Numpy array containing input data.
     """
+    
     data_X = np.zeros((len(indices), ) + tensor_shape_X, dtype=np.float32)
+
+    progress_task = progress.add_task("Loading input data...", total=len(indices)) if progress else None
 
     for idx, i in enumerate(indices):
         for k, class_name in enumerate(classes):
             file_path = os.path.join(path, f"{class_name}/{class_name}_{i}.fits")
             with fits.open(file_path, memmap=False) as hdu:
                 data_X[idx][:, :, k] = hdu[0].data
+        if progress:
+            progress.update(progress_task, advance=1)
 
     return data_X
 
-def load_target_data_asarray(indices, target_classes, path, tensor_shape_Y):
+def load_target_data_asarray_deprecated(indices, target_classes, path, tensor_shape_Y):
     """
     Loads target data and source catalogs for multiple target classes, and stores WCS information per index.
 
@@ -191,6 +281,40 @@ def load_target_data_asarray(indices, target_classes, path, tensor_shape_Y):
 
     return data_Y, source_catalogs, wcs_array
 
+def load_target_data_asarray(indices, target_classes, path, tensor_shape_Y, progress=None):
+    """
+    Loads target data and source catalogs for multiple target classes, and stores WCS information per index.
+
+    Parameters:
+    - indices: List of indices for the data files.
+    - target_classes: List of target class names corresponding to subdirectories or file prefixes.
+    - path: Base directory path containing the target class data.
+    - tensor_shape_Y: Shape of the tensor to hold `data_Y`.
+    
+    Returns:
+    - data_Y: Numpy array containing target data.
+    - wcs_array: dictionary of WCS objects, one for each index.
+    """
+    # Initialize target data array and dictionary for WCS objects
+    data_Y = np.zeros((len(indices), ) + tensor_shape_Y, dtype=np.float32)
+    wcs_dict = {}
+
+    progress_task = progress.add_task("Loading target data...", total=len(indices)) if progress else None
+    for idx, file_id in enumerate(indices):
+        for class_name in target_classes:
+            file_path = os.path.join(path, f"{class_name}/{class_name}_{file_id}.fits")
+            with fits.open(file_path, memmap=False) as hdu:
+                # Load target data
+                data_Y[idx, :, :, target_classes.index(class_name)] = hdu[0].data
+                
+                # Store WCS only once per index
+                if file_id not in wcs_dict:
+                    wcs_dict[file_id] = WCS(hdu[0].header)
+        if progress:
+            progress.update(progress_task, advance=1)
+
+    return data_Y, wcs_dict
+
 
 # Function to create patches
 @tf.function
@@ -208,7 +332,7 @@ def extract_patches(input_tensor, patch_size):
     num_patches_h = tf.shape(patches)[1]
     num_patches_w = tf.shape(patches)[2]
     num_patches = num_patches_h * num_patches_w
-    patch_dim = patch_size[0] * patch_size[1] * tf.shape(input_tensor)[-1]
+    # patch_dim = patch_size[0] * patch_size[1] * tf.shape(input_tensor)[-1]
     
     # Reshape to desired shape (Batchsize * n, patch_size[0], patch_size[1], C)
     patches = tf.reshape(patches, [batch_size * num_patches, patch_size[0], patch_size[1], -1])

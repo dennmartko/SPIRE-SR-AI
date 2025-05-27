@@ -10,10 +10,11 @@ from astroML.crossmatch import crossmatch_angular
 
 def calculate_flux_statistics(x_values, y_values, num_bins):
     # Create an array to store the median and percentile values
+    # Note: funciton now expects fluxes to be in mJy
     results = np.zeros((num_bins, 4))
 
     # Bin the x_values
-    bin_edges = np.logspace(np.log10(2e-3), np.log10(100e-3), num_bins + 1, base=10)
+    bin_edges = np.logspace(np.log10(2), np.log10(100), num_bins + 1, base=10)
     bin_indices = np.digitize(x_values, bin_edges)
 
     # Calculate median and 1 sigma percentile for each bin
@@ -50,6 +51,7 @@ def construct_matched_catalog(cat1, cat2, target_cl, max_distance):
 def cross_match_catalogs(source_cat, target_cat, flux_col_source, flux_col_target, search_radius=4):
     """
     Cross-matches two catalogs and keeps the sources that are closest in flux if there are multiple matches for one of the sources in the target catalog.
+    Note: source_cat gets matched to target_cat, so the source catalog is the one that is searched for matches in the target catalog.
 
     Parameters:
     source_cat (pd.DataFrame): Source catalog with ra, dec, and flux columns.
@@ -67,14 +69,15 @@ def cross_match_catalogs(source_cat, target_cat, flux_col_source, flux_col_targe
     target_coords = SkyCoord(ra=target_cat['ra'].values * u.degree, dec=target_cat['dec'].values * u.degree)
 
     # Perform the search around sky with a given radius
-    target_indices, source_indices, _, _ = source_coords.search_around_sky(target_coords, search_radius / 3600 * u.degree)
+    target_indices, source_indices, angdist, _ = source_coords.search_around_sky(target_coords, search_radius / 3600 * u.degree)
 
     # Create a DataFrame with matched indices and corresponding fluxes
     matches = pd.DataFrame({
         'target_idx': target_indices,
         'source_idx': source_indices,
         flux_col_target: target_cat.iloc[target_indices][flux_col_target].values,
-        flux_col_source: source_cat.iloc[source_indices][flux_col_source].values
+        flux_col_source: source_cat.iloc[source_indices][flux_col_source].values,
+        'angDist': angdist.to(u.arcsecond).value
     })
 
     # Calculate the absolute difference in flux
@@ -86,6 +89,7 @@ def cross_match_catalogs(source_cat, target_cat, flux_col_source, flux_col_targe
     # Create the matched catalog
     matched_catalog = pd.DataFrame({
         flux_col_source: closest_matches[flux_col_source],
-        flux_col_target: closest_matches[flux_col_target]
+        flux_col_target: closest_matches[flux_col_target],
+        'angDist': closest_matches['angDist'],
     })
     return matched_catalog

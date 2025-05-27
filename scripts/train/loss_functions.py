@@ -11,6 +11,13 @@ def aper_loss(predictions, y, aper_mask):
 
 # Function used during weight training
 @tf.function(jit_compile=True)
+def old_non_adversarial_loss(predictions, y, aper_mask, alpha):
+    Lh = huber_loss(predictions, y)
+    Laper = aper_loss(predictions, y, aper_mask)
+    return Lh + 5e-3*Laper
+
+# Function used during weight training
+@tf.function(jit_compile=True)
 def non_adversarial_loss(predictions, y, aper_mask, alpha):
     Lh = huber_loss(predictions, y)
     Laper = aper_loss(predictions, y, aper_mask)

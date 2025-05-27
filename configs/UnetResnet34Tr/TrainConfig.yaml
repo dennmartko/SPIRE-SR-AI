@@ -1,12 +1,12 @@
 model:
   # Model specific settings, do not change!
   model: "UnetResnet34Tr"  # Should be the same name as parent config folder
-  run_name: "2025apr15_finetuned"
+  run_name: "2025apr22_finetuned"
   input_shape: [256, 256, 4]
   output_shape: [256, 256, 1]
 
 training:
-  polynomial_lr_schedule: [0.01, 0.0001, 1000, 2]  # initial lr, end lr, epochs, power
+  polynomial_lr_schedule: [0.01, 0.0001, 250, 2]  # initial lr, end lr, epochs, power
   batch_size: 48
   number_of_epochs: 10000  # Maximum number of epochs
   patience: 250  # After how many epochs training stops with no improvement in val loss

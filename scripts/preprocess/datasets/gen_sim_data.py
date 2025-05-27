@@ -35,8 +35,8 @@ class Config:
     class_types = ["input", "input", "input", "input", "target"]
 
     # Paths
-    parent_out_dir = r"/mnt/d/SPIRE-SR-AI/data/processed" #r"/scratch/p317470/SRHerschel500/data/processed" # r"/scratch/p317470/SRHerschel500/data/processed" #r"/scratch-shared/dkoopmans" # Output directory of Data, change if needed to
-    dataset_dir_name = "dummy_set" #"120deg2_shark_sides" # Directory name of generated dataset
+    parent_out_dir = r"/mnt/g/data/PhD Projects/SR" #r"/scratch/p317470/SRHerschel500/data/processed" # r"/scratch/p317470/SRHerschel500/data/processed" #r"/scratch-shared/dkoopmans" # Output directory of Data, change if needed to
+    dataset_dir_name = "120deg2_shark_sides" # Directory name of generated dataset
     dir_to_data_maps = r"/mnt/g/data/PhD Projects/SR/sim_datamaps" #r"/scratch/p317470/SRHerschel500/data/raw/sim datamaps" # #r"/scratch/p317470/SRHerschel500/data/raw/sim datamaps" #r"/scratch-shared/dkoopmans/sim_datamaps" # Path to simulation datamaps
 
     # Instrument information
@@ -182,29 +182,23 @@ class ProcessDataSet():
         hdu.close() # Close the HDU to free up memory
 
     def interp_data(self, datamaps, original_header, interp_pixscale):
-
-        # Create the original WCS object from the provided header
-        wcs_orig = WCS(original_header)
-
         # Calculate the scaling factor from the original pixel scale to the desired interpolated pixel scale
         scale_factor = abs(original_header["CDELT1"]*3600) / interp_pixscale
 
-        # Extract a scaled header from the original WCS.
-        scaled_header = wcs_orig[::1/scale_factor, ::1/scale_factor].to_header() # Only works for crpix
-
-        # New reference pixel coordinates
-        crpix1, crpix2 = scaled_header["CRPIX1"], scaled_header["CRPIX2"]
+        # Compute new dims
+        new_naxis1 = int(np.round(original_header["NAXIS1"] * scale_factor + 0.5))
+        new_naxis2 = int(np.round(original_header["NAXIS2"] * scale_factor + 0.5))
         
-        # Compute new image dimensions for the output data map
-        # Adding 0.5 before rounding ensures that in case of decimal size, we extend the image size by 1 pixel
-        naxis1 = int(np.round(original_header["NAXIS1"] * scale_factor + 0.5))
-        naxis2 = int(np.round(original_header["NAXIS2"] * scale_factor + 0.5))
+        # Manually compute new CRPIX
+        new_crpix1 = (original_header["CRPIX1"] - 1) * scale_factor + 1
+        new_crpix2 = (original_header["CRPIX2"] - 1) * scale_factor + 1
 
         # Create new WCS object for interpolated datamap
         w_interp = WCS(naxis=2)
         w_interp.wcs.crval = [original_header["CRVAL1"], original_header["CRVAL2"]]
-        w_interp.wcs.crpix = [crpix1, crpix2]
-        w_interp.wcs.cdelt = [np.sign(original_header["CDELT1"]) * interp_pixscale/3600, np.sign(original_header["CDELT2"]) * interp_pixscale/3600]
+        w_interp.wcs.crpix = [new_crpix1, new_crpix2]
+        w_interp.wcs.cdelt = [np.sign(original_header["CDELT1"]) * interp_pixscale/3600, 
+                              np.sign(original_header["CDELT2"]) * interp_pixscale/3600]
         w_interp.wcs.ctype = ["RA---TAN", "DEC--TAN"]
         w_interp.wcs.cunit = [u.deg, u.deg]
 
@@ -213,7 +207,7 @@ class ProcessDataSet():
         interp_data = reproject_exact(
             (datamaps, original_header),
             w_interp.to_header(), 
-            shape_out=(naxis2, naxis1),
+            shape_out=(new_naxis2, new_naxis1),
             parallel=Config.N_CPU_INTERP, 
             return_footprint=False)
 
@@ -412,8 +406,8 @@ class ProcessDataSet():
 ##########################
 ###  CODE IS RUN HERE ####
 ##########################
-SHARK = [f"SHARK_{i+1}" for i in range(0, 2)]
-SIDES = [f"SIDES_{i+1}" for i in range(0, 2)]
+SHARK = [f"SHARK_{i+1}" for i in range(0, 30)]
+SIDES = [f"SIDES_{i+1}" for i in range(0, 30)]
 #SPRITZ = [f"SPRITZ"]
 prefixes = SIDES + SHARK # Prefixes of the datamaps. Check the code for "fname" for details on standard formatting of files. CTRL + F --> "fname"
 

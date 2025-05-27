@@ -82,9 +82,9 @@ class DataSplitter():
         print("Directory Cleaned!")
 
 
-base = "/mnt/d/SPIRE-SR-AI/data/processed/dummy_set" #r"/scratch-shared/dkoopmans/120deg2_shark_sides"
-SHARK = [f"SHARK_{i+1}" for i in range(0, 2)]
-SIDES = [f"SIDES_{i+1}" for i in range(0, 2)]
+base = r"/mnt/g/data/PhD Projects/SR/120deg2_shark_sides" #r"/scratch-shared/dkoopmans/120deg2_shark_sides"
+SHARK = [f"SHARK_{i+1}" for i in range(0, 30)]
+SIDES = [f"SIDES_{i+1}" for i in range(0, 30)]
 datasets = SHARK + SIDES # Prefixes of the datamaps. Check the code for "fname" for details on standard formatting of files. CTRL + F --> "fname"
 
 listdir_to_datasets = [os.path.join(base, dataset) for dataset in datasets]
