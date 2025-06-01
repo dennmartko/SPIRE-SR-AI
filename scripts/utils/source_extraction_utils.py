@@ -5,6 +5,7 @@ from astropy.modeling import functional_models
 from photutils.psf import PSFPhotometry, SourceGrouper, make_psf_model
 from photutils.detection import DAOStarFinder
 
+from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 # Define the custom 2D Gaussian PSF model
@@ -133,25 +134,80 @@ def source_extraction(data: np.ndarray, wcs: WCS, file_id: int, fwhm_pix: float,
 
     return df
 
-def construct_source_catalog(images, wcs_dict, fwhm_pix, threshold=2e-3, N_CPU=10, progress=None, task_desc=None):
+# def construct_source_catalog(images, wcs_dict, fwhm_pix, threshold=2e-3, N_CPU=10, progress=None, task_desc=None):
+
+#     results = []
+#     progress_task = progress.add_task(task_desc, total=int(images.shape[0])) if progress else None
+
+#     # We need to give file_id given that we retireve the processes as they get completed (which is not chronological)
+#     with ProcessPoolExecutor(max_workers=N_CPU) as executor:
+#         futures = [
+#             executor.submit(source_extraction, image, wcs_dict[file_id], file_id, fwhm_pix, threshold) for image, file_id in zip(images, wcs_dict.keys())
+#         ]
+    
+#         for future in as_completed(futures):
+#             results.append(future.result())
+#             if progress is not None and progress_task is not None:
+#                 progress.update(progress_task, advance=1)
+#                 #progress.refresh()
+
+#     if results:
+#         df = pd.concat(results, ignore_index=True)
+#     else:
+#         df = pd.DataFrame([])
+    
+#     if progress is not None and progress_task is not None:
+#         progress.update(progress_task, completed=progress.tasks[progress_task].total)
+        
+#     return df
+
+# Set-up progress bar
+def create_progress():
+    progress = Progress(
+        TextColumn("[bold blue]Status:[/bold blue] [medium_purple]{task.description}"),
+        BarColumn(
+            bar_width=60,
+            complete_style="bold green",
+            finished_style="green",
+            pulse_style="bright_blue"
+        ),
+        TextColumn("[bold cyan]{task.percentage:>3.0f}% Complete[bold cyan]"),
+        TimeElapsedColumn(),
+        refresh_per_second=10
+    )
+    return progress
+
+def construct_source_catalog(images, wcs_dict, fwhm_pix, threshold=2e-3, N_CPU=10, task_desc=None):
 
     results = []
-    progress_task = progress.add_task(task_desc, total=int(images.shape[0])) if progress else None
+    # progress = create_progress() if task_desc is not None else None
 
-    # We need to give file_id given that we retireve the processes as they get completed (which is not chronological)
+    # if progress is not None:
+    #     with progress:
+    #         task_id = progress.add_task(task_desc, total=int(images.shape[0]))
+            
+    #         with ProcessPoolExecutor(max_workers=N_CPU) as executor:
+    #             futures = [
+    #                 executor.submit(source_extraction, image, wcs_dict[file_id], file_id, fwhm_pix, threshold)
+    #                 for image, file_id in zip(images, wcs_dict.keys())
+    #             ]
+                
+    #             for future in as_completed(futures):
+    #                 results.append(future.result())
+    #                 progress.update(task_id, advance=1)
+    #                 progress.refresh()
     with ProcessPoolExecutor(max_workers=N_CPU) as executor:
         futures = [
-            executor.submit(source_extraction, image, wcs_dict[file_id], file_id, fwhm_pix, threshold) for image, file_id in zip(images, wcs_dict.keys())
+            executor.submit(source_extraction, image, wcs_dict[file_id], file_id, fwhm_pix, threshold)
+            for image, file_id in zip(images, wcs_dict.keys())
         ]
-    
+        
         for future in as_completed(futures):
             results.append(future.result())
-            if progress is not None and progress_task is not None:
-                progress.update(progress_task, advance=1)
-                #progress.refresh()
 
     if results:
         df = pd.concat(results, ignore_index=True)
     else:
         df = pd.DataFrame([])
+
     return df

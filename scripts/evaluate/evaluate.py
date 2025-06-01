@@ -1,5 +1,6 @@
 # Standard libraries
 import os
+import sys
 import datetime
 import argparse
 import warnings
@@ -51,6 +52,9 @@ from scripts.utils.evaluation_plots import (
 )
 
 from models.architectures.UnetResnet34Tr import UnetResnet34Tr
+from models.architectures.UnetResnet34TrNew import UnetResnet34TrNew
+from models.architectures.SwinUnet import swin_unet_2d_base
+from models.architectures.Unet import build_unet
 
 # Configure logger and warnings
 tf.get_logger().setLevel('ERROR')
@@ -86,10 +90,30 @@ def create_progress():
 # Load model - Needs to be updated to include all models
 def initialize_model(config):
     model_name = config["model"]["model"]
+    run_name = config["model"]["run_name"]
     input_shape = tuple(config["model"]["input_shape"])
 
     if model_name == "UnetResnet34Tr":
         model = UnetResnet34Tr(input_shape, "channels_last")
+    elif ("new" in run_name.lower()) and (model_name == "UnetResnet34Tr"):
+        model = UnetResnet34TrNew(input_shape, "channels_last")
+        model.build((None,) + tuple(input_shape))
+        
+    elif model_name == "SwinUnet":
+        filter_num_begin = 96     # number of channels in the first downsampling block; it is also the number of embedded dimensions
+        depth = 4                  # the depth of SwinUNET; depth=4 means three down/upsampling levels and a bottom level 
+        stack_num_down = 3         # number of Swin Transformers per downsampling level
+        stack_num_up = 3           # number of Swin Transformers per upsampling level
+        patch_size = (4, 4)        # Extract 4-by-4 patches from the input image. Height and width of the patch must be equal.
+        num_heads = [6, 12, 12, 12]   # number of attention heads per down/upsampling level
+        window_size = [8, 4, 4, 2] # the size of attention window per down/upsampling level
+        num_mlp = 512              # number of MLP nodes within the Transformer
+        shift_window=True          # Apply window shifting, i.e., Swin-MSA
+        model = swin_unet_2d_base(tuple(input_shape), filter_num_begin, depth, stack_num_down, stack_num_up, 
+                        patch_size, num_heads, window_size, num_mlp, 
+                        shift_window=shift_window, name='swin_unet')
+    elif model_name == "Unet":
+        model = build_unet(tuple(input_shape), "channels_last")
     else:
         raise NotImplementedError(f"Model '{model_name}' is not implemented.")
     return model
@@ -160,7 +184,6 @@ if __name__ == "__main__":
     df_input = input_table.to_pandas()
     df_native = native_table.to_pandas()
 
-
     # Set the source flux columns to be in mJy
     df_target["source_flux_target"] *= 1000
     df_sr["S500SR"] *= 1000
@@ -195,33 +218,40 @@ if __name__ == "__main__":
     matched_target = cross_match_catalogs(df_target, df_input, flux_col_source="source_flux_target", flux_col_target="SSPIRE500")
     matched_native = cross_match_catalogs(df_native, df_input, flux_col_source="source_flux_native", flux_col_target="SSPIRE500", search_radius=8)
 
+    # Check if the matched catalogs have enough entries
+    if matched_sr.shape[0] < 0.1 * df_input.shape[0]:
+        print("Matched super-resolved catalog has less than 10% of the input catalog entries. "
+                     "This may indicate that the model was not trained properly or the catalogs were not generated correctly. Exiting.")
+        sys.exit(0)
     # Now its time to plot the results
     # Plots come from our custom library
 
     # IQR flux statistics Target, Native and SR
-    # plot_binned_iqr(
-    #     S_in_list=[matched_sr["SSPIRE500"], matched_target["SSPIRE500"], matched_native["SSPIRE500"]],
-    #     S_out_list=[matched_sr["S500SR"], matched_target["source_flux_target"], matched_native["source_flux_native"]],
-    #     bool_scatterplots=[True, False, False],
-    #     legend_labels=['Super-resolved', 'Target (Y)', 'Native (PLW)'],
-    #     xlabel=r'Input 500$\mu m$ Source Flux $S_{in}$ [mJy]',
-    #     ylabel=r'$(S_{out} - S_{in})/S_{in}$',
-    #     colors=["#8b0023", "#0a5c36", "#fbb917"],
-    #     bins=15,
-    #     save_path=os.path.join(sim_results_dir, "IQR_flux_statistics.pdf"),
-    # )
-
     plot_binned_iqr(
-        S_in_list=[matched_sr["SSPIRE500"], matched_native["SSPIRE500"]],
-        S_out_list=[matched_sr["S500SR"], matched_native["source_flux_native"]],
-        bool_scatterplots=[True, False],
-        legend_labels=['Super-resolved', 'Native (PLW)'],
+        S_in_list=[matched_sr["SSPIRE500"], matched_target["SSPIRE500"], matched_native["SSPIRE500"]],
+        S_out_list=[matched_sr["S500SR"], matched_target["source_flux_target"], matched_native["source_flux_native"]],
+        bool_scatterplots=[True, False, False],
+        legend_labels=['Super-resolved', 'Target (Y)', 'Native (PLW)'],
         xlabel=r'Input 500$\mu m$ Source Flux $S_{in}$ [mJy]',
         ylabel=r'$(S_{out} - S_{in})/S_{in}$',
-        colors=["#8b0023", "#fbb917"],
+        colors=["#8b0023", "#0a5c36", "#fbb917"],
         bins=15,
         save_path=os.path.join(sim_results_dir, "IQR_flux_statistics.pdf"),
     )
+
+    print(matched_sr["SSPIRE500"].shape, matched_sr["S500SR"].shape, matched_native["source_flux_native"])
+
+    # plot_binned_iqr(
+    #     S_in_list=[matched_sr["SSPIRE500"], matched_native["SSPIRE500"]],
+    #     S_out_list=[matched_sr["S500SR"], matched_native["source_flux_native"]],
+    #     bool_scatterplots=[True, False],
+    #     legend_labels=['Super-resolved', 'Native (PLW)'],
+    #     xlabel=r'Input 500$\mu m$ Source Flux $S_{in}$ [mJy]',
+    #     ylabel=r'$(S_{out} - S_{in})/S_{in}$',
+    #     colors=["#8b0023", "#fbb917"],
+    #     bins=15,
+    #     save_path=os.path.join(sim_results_dir, "IQR_flux_statistics.pdf"),
+    # )
 
     ## Contour plot of the reliability and completeness. This plot is a bit complicated to interpret, but it's one plot showing both metrics.
     # target vs SR

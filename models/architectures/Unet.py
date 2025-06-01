@@ -50,8 +50,8 @@ def build_unet(shape, data_format):
 
     # Final Layer
     lay11_1 = Conv2DTranspose(1, (K1, K1), strides=(1, 1), use_bias=B2, padding='same', data_format=data_format)(act10)
-    #act11 = Activation('sigmoid')(lay11_1)
+    act11 = Activation('sigmoid')(lay11_1) # must be removed for better performance
 
     # Model
-    model = tf.keras.Model(inp, lay11_1)
+    model = tf.keras.Model(inp, act11)
     return model

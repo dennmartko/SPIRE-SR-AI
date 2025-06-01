@@ -15,6 +15,7 @@ from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 
+
 # # Suppress warnings from photutils
 # warnings.filterwarnings("ignore")
 
@@ -36,6 +37,9 @@ from scripts.utils.source_extraction_utils import (
     construct_source_catalog
 )
 from models.architectures.UnetResnet34Tr import UnetResnet34Tr
+from models.architectures.UnetResnet34TrNew import UnetResnet34TrNew
+from models.architectures.SwinUnet import swin_unet_2d_base
+from models.architectures.Unet import build_unet
 from astropy.table import Table
 
 # Parse arguments
@@ -68,13 +72,35 @@ def create_progress():
 # Load model
 def initialize_model(config):
     model_name = config["model"]["model"]
+    run_name = config["model"]["run_name"]
     input_shape = tuple(config["model"]["input_shape"])
 
     if model_name == "UnetResnet34Tr":
         model = UnetResnet34Tr(input_shape, "channels_last")
+    elif ("new" in run_name.lower()) and (model_name == "UnetResnet34Tr"):
+        model = UnetResnet34TrNew(input_shape, "channels_last")
+        model.build((None,) + tuple(input_shape))
+        
+    elif model_name == "SwinUnet":
+        filter_num_begin = 96     # number of channels in the first downsampling block; it is also the number of embedded dimensions
+        depth = 4                  # the depth of SwinUNET; depth=4 means three down/upsampling levels and a bottom level 
+        stack_num_down = 3         # number of Swin Transformers per downsampling level
+        stack_num_up = 3           # number of Swin Transformers per upsampling level
+        patch_size = (4, 4)        # Extract 4-by-4 patches from the input image. Height and width of the patch must be equal.
+        num_heads = [6, 12, 12, 12]   # number of attention heads per down/upsampling level
+        window_size = [8, 4, 4, 2] # the size of attention window per down/upsampling level
+        num_mlp = 512              # number of MLP nodes within the Transformer
+        shift_window=True          # Apply window shifting, i.e., Swin-MSA
+        model = swin_unet_2d_base(tuple(input_shape), filter_num_begin, depth, stack_num_down, stack_num_up, 
+                        patch_size, num_heads, window_size, num_mlp, 
+                        shift_window=shift_window, name='swin_unet')
+    elif model_name == "Unet":
+        model = build_unet(tuple(input_shape), "channels_last")
+        model.build((None,) + tuple(input_shape))
     else:
         raise NotImplementedError(f"Model '{model_name}' is not implemented.")
     return model
+
 
 def SuperResolve(config, data_X, model, progress):
     target_shape = tuple(config["model"]["output_shape"])
@@ -126,8 +152,8 @@ if __name__ == "__main__":
         Y, wcs_dict = load_target_data_asarray(indices, target_classes=config["data"]["target"], path=test_dir, tensor_shape_Y=tuple(config["model"]["output_shape"]), progress=prog)
 
     # First, calculate the ground truth high-resolution catalog(s)
-    ## We implement multi-processing such that each cutout is processed individually
-    with progress as prog:
+    # We implement multi-processing such that each cutout is processed individually
+    if config["data"]["target_catalog_output_dir"] is not None:
         for idx, target_cl in enumerate(config["data"]["target"]):
             # progress_task = prog.add_task(f"Catalog extraction for target {target_cl}...", total=int(Y[..., idx].shape[0]))
             target_source_catalog = construct_source_catalog(
@@ -136,7 +162,6 @@ if __name__ == "__main__":
                 sr_config[target_cl]["FWHM"],
                 sr_config[target_cl]["flux_threshold"],
                 N_CPU=config["sys_config"]["n_cpu_cores"],
-                progress=prog,
                 task_desc=f"Extracting source catalog from target images for {target_cl} class..."
             )
 
@@ -148,12 +173,15 @@ if __name__ == "__main__":
             catalog_table = Table.from_pandas(target_source_catalog)
             catalog_table.write(catalog_path, format='fits', overwrite=True)
 
+
     # Finally, we perform super-resolution using the chosen model
     # Subsequently, we extract the source catalog from the super-resolved images
     
     ## Initialize model
     model = initialize_model(config)
     model_weights_path, sim_results_dir = setup_directories(config)
+
+    print(model_weights_path, sim_results_dir)
 
     ## Load model weights
     print(f"{datetime.datetime.now()} - Restoring model...")
@@ -168,23 +196,21 @@ if __name__ == "__main__":
     print(f"{datetime.datetime.now()} - Target bands super-resolved!")
 
     ## Source extraction on super-resolved images
-    with progress as prog:
-        for idx, target_cl in enumerate(config["data"]["target"]):
-            #progress_task = prog.add_task(f"Catalog extraction for super-resolved {target_cl}...", total=int(predictions[..., idx].shape[0]))
-            sr_source_catalog = construct_source_catalog(
-                predictions[..., idx],
-                wcs_dict,
-                sr_config[target_cl]["FWHM"],
-                sr_config[target_cl]["flux_threshold"],
-                N_CPU=config["sys_config"]["n_cpu_cores"],
-                progress=prog,
-                task_desc=f"Extracting source catalog from super-resolved {target_cl.replace('SR', '')} micron images"
-            )
+    for idx, target_cl in enumerate(config["data"]["target"]):
+        sr_source_catalog = construct_source_catalog(
+            predictions[..., idx],
+            wcs_dict,
+            sr_config[target_cl]["FWHM"],
+            sr_config[target_cl]["flux_threshold"],
+            N_CPU=config["sys_config"]["n_cpu_cores"],
+            task_desc=f"Extracting source catalog from super-resolved {target_cl.replace('SR', '')} micron images..."
+        )
 
-            sr_source_catalog.rename(columns={'source_flux': f'S{target_cl}'}, inplace=True)
+        sr_source_catalog.rename(columns={'source_flux': f'S{target_cl}'}, inplace=True)
 
-            # Store the catalog
-            catalog_filename = f"{target_cl}_SR_catalog.fits"
-            catalog_path = os.path.join(sim_results_dir, catalog_filename)
-            catalog_table = Table.from_pandas(sr_source_catalog)
-            catalog_table.write(catalog_path, format='fits', overwrite=True)
+        # Store the catalog
+        catalog_filename = f"{target_cl}_SR_catalog.fits"
+        catalog_path = os.path.join(sim_results_dir, catalog_filename)
+        catalog_table = Table.from_pandas(sr_source_catalog)
+        catalog_table.write(catalog_path, format='fits', overwrite=True)
+

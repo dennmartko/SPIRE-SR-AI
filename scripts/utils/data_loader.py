@@ -191,7 +191,7 @@ def create_dataset_tf(directory, input_classes, target_classes, batch_size, is_t
             files_ds
             .map(_load_and_stack, num_parallel_calls=tf.data.AUTOTUNE)
             .cache()
-            .shuffle(1024)
+            # .shuffle(1024)
             .map(augment_tf, num_parallel_calls=tf.data.AUTOTUNE)
             .batch(batch_size)
             .prefetch(tf.data.AUTOTUNE)
@@ -208,7 +208,7 @@ def create_dataset_tf(directory, input_classes, target_classes, batch_size, is_t
     return dataset, dataset.cardinality()
 
 
-def load_input_data_asarray(indices, classes, path, tensor_shape_X, progress=None):
+def load_input_data_asarray(indices, classes, path, tensor_shape_X, progress=None, get_wcs=False):
     """
     Loads input data into a numpy array from a directory containing the class FITS files.
     
@@ -225,15 +225,23 @@ def load_input_data_asarray(indices, classes, path, tensor_shape_X, progress=Non
     data_X = np.zeros((len(indices), ) + tensor_shape_X, dtype=np.float32)
 
     progress_task = progress.add_task("Loading input data...", total=len(indices)) if progress else None
+    wcs_dict = {}
 
-    for idx, i in enumerate(indices):
+    for idx, file_id in enumerate(indices):
         for k, class_name in enumerate(classes):
-            file_path = os.path.join(path, f"{class_name}/{class_name}_{i}.fits")
+            file_path = os.path.join(path, f"{class_name}/{class_name}_{file_id}.fits")
             with fits.open(file_path, memmap=False) as hdu:
                 data_X[idx][:, :, k] = hdu[0].data
+                if get_wcs and k == 0:
+                    # Store WCS information using the first class
+                    if file_id not in wcs_dict:
+                        wcs_dict[file_id] = WCS(hdu[0].header)
         if progress:
             progress.update(progress_task, advance=1)
 
+    if get_wcs:
+        # Return data_X and WCS information
+        return data_X, wcs_dict
     return data_X
 
 def load_target_data_asarray_deprecated(indices, target_classes, path, tensor_shape_Y):

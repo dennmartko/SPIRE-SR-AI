@@ -56,17 +56,17 @@ def create_model_ckpt_folder(model_name, run_name):
 
     return run_name_weights_dir, first_run
 
-def setup_directories(config):
+def setup_directories(config, purpose="simulation_results"):
     model_name = config["model"]["model"]
     run_name = config["model"]["run_name"]
 
     # Model weights and results directories
     model_weights_path, _ = create_model_ckpt_folder(model_name, run_name)
     test_results_dir = create_model_results_subfolder(model_name, run_name, "testing")
-    sim_results_dir = os.path.join(test_results_dir, "simulation_results")
+    results_dir = os.path.join(test_results_dir, purpose)
 
-    os.makedirs(sim_results_dir, exist_ok=True)
-    return model_weights_path, sim_results_dir
+    os.makedirs(results_dir, exist_ok=True)
+    return model_weights_path, results_dir
 
 def create_log_file(model_name, run_name, first_run):
     model_log_dir = os.path.join(get_main_dir(), "logs", model_name)

@@ -48,7 +48,7 @@ def construct_matched_catalog(cat1, cat2, target_cl, max_distance):
     })
     return matched_cat
 
-def cross_match_catalogs(source_cat, target_cat, flux_col_source, flux_col_target, search_radius=4):
+def cross_match_catalogs(source_cat, target_cat, flux_col_source, flux_col_target, search_radius=4, keep_columns=None):
     """
     Cross-matches two catalogs and keeps the sources that are closest in flux if there are multiple matches for one of the sources in the target catalog.
     Note: source_cat gets matched to target_cat, so the source catalog is the one that is searched for matches in the target catalog.
@@ -70,15 +70,27 @@ def cross_match_catalogs(source_cat, target_cat, flux_col_source, flux_col_targe
 
     # Perform the search around sky with a given radius
     target_indices, source_indices, angdist, _ = source_coords.search_around_sky(target_coords, search_radius / 3600 * u.degree)
-
+    
     # Create a DataFrame with matched indices and corresponding fluxes
     matches = pd.DataFrame({
         'target_idx': target_indices,
         'source_idx': source_indices,
         flux_col_target: target_cat.iloc[target_indices][flux_col_target].values,
         flux_col_source: source_cat.iloc[source_indices][flux_col_source].values,
-        'angDist': angdist.to(u.arcsecond).value
+        'angDist': angdist.to(u.arcsecond).value,
     })
+
+    # If we need to keep only certain columns, filter the catalogs
+    if keep_columns is not None:
+        source_columns_keep = [col for col in source_cat.columns if col in keep_columns]
+        target_columns_keep = [col for col in target_cat.columns if col in keep_columns]
+        for col in source_columns_keep:
+            # Exclude the flux column already added
+            if col != flux_col_source:
+                matches[f'{col}'] = source_cat.iloc[source_indices][col].values
+        for col in target_columns_keep:
+            if col != flux_col_target:
+                matches[f'{col}'] = target_cat.iloc[target_indices][col].values
 
     # Calculate the absolute difference in flux
     matches['flux_diff'] = np.abs(matches[flux_col_source] - matches[flux_col_target])
@@ -92,4 +104,13 @@ def cross_match_catalogs(source_cat, target_cat, flux_col_source, flux_col_targe
         flux_col_target: closest_matches[flux_col_target],
         'angDist': closest_matches['angDist'],
     })
+
+    # If we kept additional columns, add them to the matched catalog
+    if keep_columns is not None:
+        for col in source_columns_keep:
+            if col != flux_col_source:
+                matched_catalog[col] = closest_matches[col].values
+        for col in target_columns_keep:
+            if col != flux_col_target:
+                matched_catalog[col] = closest_matches[col].values
     return matched_catalog

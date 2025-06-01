@@ -138,19 +138,19 @@ class ProcessDataSet():
 
         # Image dimensions (FITS data shape is (ny, nx))
         ny, nx = hdu[0].data.shape[0], hdu[0].data.shape[1]
-        nx_arcsec, ny_arcsec = nx*abs(hdr["CDELT1"]), ny*abs(hdr["CDELT2"])
+        nx_deg, ny_deg = nx*abs(hdr["CDELT1"]), ny*abs(hdr["CDELT2"])
 
         # Compute centers along X and Y in pixel coordinates
-        center_offset_x_arcsec = Config.input_cutout_dims[0] // 2 * 1/3600
-        center_offset_y_arcsec = Config.input_cutout_dims[1] // 2 * 1/3600
+        center_offset_x = Config.input_cutout_dims[0] // 2 * 1/3600
+        center_offset_y = Config.input_cutout_dims[1] // 2 * 1/3600
 
-        centers_x_arcsec = np.arange(center_offset_x_arcsec, nx_arcsec - center_offset_x_arcsec, Config.input_cutout_dims[0] * 1/3600)
-        centers_y_arcsec = np.arange(center_offset_y_arcsec, ny_arcsec - center_offset_y_arcsec, Config.input_cutout_dims[1] * 1/3600)
+        centers_x = np.arange(center_offset_x, nx_deg - center_offset_x, Config.input_cutout_dims[0] * 1/3600)
+        centers_y = np.arange(center_offset_y, ny_deg - center_offset_y, Config.input_cutout_dims[1] * 1/3600)
 
         # Compute meshgrid of center coordinates for the cutouts
-        grid_x_arcsec, grid_y_arcsec = np.meshgrid(centers_x_arcsec, centers_y_arcsec)
+        grid_x, grid_y = np.meshgrid(centers_x, centers_y)
 
-        grid_x, grid_y = grid_x_arcsec / abs(hdr["CDELT1"]), grid_y_arcsec / abs(hdr["CDELT2"])
+        grid_x, grid_y = grid_x / abs(hdr["CDELT1"]), grid_y / abs(hdr["CDELT2"])
 
         # Compute the corresponding ra and dec coordinates
         grid_ra, grid_dec = w.all_pix2world(grid_x, grid_y, 0)
