@@ -14,6 +14,7 @@ from astropy.io import fits
 from rich.progress import Progress, TextColumn, BarColumn, TimeElapsedColumn
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
+import time
 
 
 # # Suppress warnings from photutils
@@ -166,7 +167,10 @@ if __name__ == "__main__":
 
     ## Super-resolve the target bands
     with progress as prog:
+        start_time = time.time()
         predictions = SuperResolve(config, X, model, prog)
+        end_time = time.time()
+        print(f"SuperResolve completed in {end_time - start_time:.2f} seconds.")
     print(f"{datetime.datetime.now()} - Target bands super-resolved!")
 
     ## Source extraction on super-resolved images

@@ -38,7 +38,7 @@ def plot_image_grid(
     nrows, ncols, H, W = images.shape
 
     # Labels for each row to display on the first column
-    row_labels = ['High-resolution', 'Super-resolved', 'Residual']
+    row_labels = ['Native', 'Super-resolved', 'High-resolution']
 
     # Normalize vmins/vmaxs to lists
     if vmins is None:
@@ -123,11 +123,10 @@ def plot_image_grid(
                                                (cat_target[:, 1] < y0 + region_size - offset)]
             
                 # Plot all positions in the highlighted region
-                if i == 0:
+                if i >= 0:
                     axins.scatter(cat_target_region[:,0]-x0, cat_target_region[:, 1]-y0, marker='x', s=80, color='blue')
                 if i >= 1:
                     axins.scatter(cat_sr_region[:,0]-x0, cat_sr_region[:, 1]-y0, marker='o', s=80, facecolors='none', edgecolors='green', linewidths=2)
-                    axins.scatter(cat_target_region[:,0]-x0, cat_target_region[:, 1]-y0, marker='x', s=80, color='blue')
         # Set row label on first column
         ax_label = axes[i, 0]
         ax_label.set_ylabel(
@@ -146,7 +145,7 @@ def plot_image_grid(
         cax.yaxis.set_ticks_position('right')
         cax.yaxis.set_label_position('right')
         cax.set_xticks([])
-        cb.set_label('Flux (mJy)', fontsize=12)
+        cb.set_label('Flux [mJy]', fontsize=12)
     
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -172,19 +171,25 @@ def plot_binned_iqr(S_in_list, S_out_list, bool_scatterplots, legend_labels, xla
         # Plot median line and IQR region
         plt.plot(
             centers, p50,
-            linestyle='-', color=color, label=label
+            linestyle='-', color=color, label=label, lw=2.0
         )
 
         plt.fill_between(
             centers, p16, p84,
-            alpha=0.3, color=color
+            alpha=0.35, color=color
         )
 
         if bool_scatterplot and sum(bool_scatterplots) <= 1: # Only 1 scatterplot can be shown
             plt.scatter(S_in, flux_ratios, s=0.25, color='black', alpha=0.1, marker='o')
 
     # Horizontal line at zero (ideal)
+    sigma_conf = 6.8
+    sigma_instr = 2
+    sigma_total = np.sqrt(sigma_instr**2 + sigma_conf**2)
+
     plt.axhline(0, linestyle='--', linewidth=2, color='#0e1111', alpha=0.7, label="1:1")
+    plt.axvline(sigma_total, color='black', linestyle=':', lw=1.5)
+    plt.text(sigma_total * 0.85, -0.84, r'1$\sigma_{total}$', color='black', fontsize=14, rotation=90, va='center', alpha=0.6)
 
     # Log-scale X axis
     plt.xscale('log')
@@ -195,13 +200,13 @@ def plot_binned_iqr(S_in_list, S_out_list, bool_scatterplots, legend_labels, xla
     plt.ylim([-1, 1])
 
     # tick labels
-    plt.tick_params(axis='both', which='major', labelsize=12)
-    plt.tick_params(axis='both', which='minor', labelsize=12)
+    plt.tick_params(axis='both', which='major', labelsize=14)
+    plt.tick_params(axis='both', which='minor', labelsize=14)
 
     # axis labels
-    plt.xlabel(xlabel, fontsize=12)
-    plt.ylabel(ylabel, fontsize=12)
-    plt.legend(loc='lower right', frameon=False)
+    plt.xlabel(xlabel, fontsize=16)
+    plt.ylabel(ylabel, fontsize=16)
+    plt.legend(loc='lower right', frameon=False, fontsize=14)
     plt.tight_layout()
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
@@ -213,7 +218,7 @@ def contourplot_completeness_reliability(input_cat, output_cat,
     Computes completeness and reliability across flux bins and plots them
     with a linear color scale.
     """
-        # Cross‑match catalogs
+    # Cross‑match catalogs
     matched_from_input = cross_match_catalogs(
         output_cat, input_cat, flux_col_output, flux_col_input, search_radius
     )
@@ -259,7 +264,7 @@ def contourplot_completeness_reliability(input_cat, output_cat,
         comp = tp_c / n_in if n_in > 0 else np.nan
         rel  = tp_r / n_out if n_out > 0 else np.nan
 
-        # Fill row `idx`
+        # Fill row
         metrics_df.at[idx, 'TPc'] = tp_c
         metrics_df.at[idx, 'FNc'] = fn_c
         metrics_df.at[idx,  'C']  = comp
@@ -305,8 +310,7 @@ def plot_completeness_reliability(input_cat, output_cat,
                                   flux_col_input, flux_col_output,
                                   bins, search_radius=4, save_path=None):
     """
-    Computes completeness and reliability across flux bins and plots them
-    with a linear color scale.
+    Computes completeness and reliability across flux bins and plots them.
     """
 
     # Cross‑match catalogs
@@ -355,7 +359,7 @@ def plot_completeness_reliability(input_cat, output_cat,
         comp = tp_c / n_in if n_in > 0 else np.nan
         rel  = tp_r / n_out if n_out > 0 else np.nan
 
-        # Fill row `idx`
+        # Fill row
         metrics_df.at[idx, 'TPc'] = tp_c
         metrics_df.at[idx, 'FNc'] = fn_c
         metrics_df.at[idx,  'C']  = comp
@@ -406,14 +410,17 @@ def plot_completeness_reliability(input_cat, output_cat,
     axs[1].errorbar(bin_centers, metrics_df['cum_C'], yerr=np.sqrt(metrics_df['cum_C'] * (1 - metrics_df['cum_C'])/metrics_df['den_C_cum']), marker='o', markersize=4,
                     capsize=0, capthick=0, elinewidth=1, linewidth=1, fillstyle='none', linestyle='dashed', alpha=0.6, label=r"$C(\geq S_{bin})$")
     
-    # Interpolate cumulative reliability and completeness at 10 mJy (bin_centers are in mJy)
-    flux_threshold = 10.
-    interp_R = np.interp(flux_threshold, bin_centers, metrics_df['cum_R'])
-    interp_C = np.interp(flux_threshold, bin_centers, metrics_df['cum_C'])
+    # Interpolate cumulative reliability and completeness at 1 sigma level -> Note bin centers are in mjy
+    sigma_conf = 6.8
+    sigma_instr = 2
+    sigma_total = np.sqrt(sigma_instr**2 + sigma_conf**2)
+    
+    interp_R = np.interp(sigma_total, bin_centers, metrics_df['cum_R'])
+    interp_C = np.interp(sigma_total, bin_centers, metrics_df['cum_C'])
 
     # Create annotation string
-    annotation_R = f"R(>10mJy) = {interp_R:.2f}"
-    annotation_C = f"C(>10mJy) = {interp_C:.2f}"
+    annotation_R = f"R($\geq 1\sigma_{{total}}$) = {interp_R:.2f}"
+    annotation_C = f"C($\geq 1\sigma_{{total}}$) = {interp_C:.2f}"
 
     # Place the annotation on both subplots
     axs[0].text(10, 0.50, annotation_R,
@@ -422,6 +429,10 @@ def plot_completeness_reliability(input_cat, output_cat,
     axs[1].text(10, 0.50, annotation_C,
                 fontsize=10, verticalalignment='top',
                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.5))
+
+    for ax in np.ravel(axs):
+        ax.axvline(sigma_total, color='black', linestyle=':', lw=1.5)
+        ax.text(sigma_total * 0.75, 0.15, r'1$\sigma_{total}$', color='black', fontsize=12, rotation=90, va='center', alpha=0.6)
 
     # Set the x-axis to log scale and add a minor grid
     axs[0].set_xscale('log')
@@ -434,8 +445,8 @@ def plot_completeness_reliability(input_cat, output_cat,
     axs[1].grid(which='both', alpha=0.3, color='lightgrey', linestyle='--')
     
     # Set the axis labels and title for the main plot
-    axs[0].set_xlabel('Super-resolved Source Flux (mJy)', fontsize=10)
-    axs[1].set_xlabel('Target Source Flux (mJy)', fontsize=10)
+    axs[0].set_xlabel('Super-resolved Source Flux [mJy]', fontsize=10)
+    axs[1].set_xlabel('Target Source Flux [mJy]', fontsize=10)
     
     axs[0].set_ylabel('Reliability', fontsize=10)
     axs[1].set_ylabel('Completeness', fontsize=10)
@@ -466,7 +477,7 @@ def plot_completeness_reliability(input_cat, output_cat,
 
 def pos_flux_plot(input_fluxes, output_fluxes, offsets, xbins, ybins,
                   xlabel=r"$(S_{SR} - S_{Target})/S_{Target}$",
-                  ylabel="Offset ('')",
+                  ylabel="Offset ['']",
                   interpolation=True, save_path=None):
     '''Plots the positional offset against source flux reproduction.
        Shows systematics and focuses on the region around perfect performance.
@@ -481,7 +492,7 @@ def pos_flux_plot(input_fluxes, output_fluxes, offsets, xbins, ybins,
     ycenters = (yedges[:-1] + yedges[1:]) / 2
 
     # Prepare colormap
-    cmap = plt.colormaps['plasma'].with_extremes(bad=plt.colormaps['plasma'](0.))
+    cmap = plt.colormaps['turbo'].with_extremes(bad=plt.colormaps['turbo'](0.))
 
     # Set up figure and axes
     fig = plt.figure(figsize=(7.5, 7.5))
@@ -533,18 +544,24 @@ def pos_flux_plot(input_fluxes, output_fluxes, offsets, xbins, ybins,
 
     # Plot marginals and CDFs
     ax_xhist.plot(xi, pdf_x, color='blue', lw=1)
-    ax_xhist.twinx().plot(xi, cdf_x, color='red', linestyle='--', lw=1)
+    ax_xhist2 = ax_xhist.twinx()
+    ax_xhist2.plot(xi, cdf_x, color='red', linestyle='--', lw=1)
     ax_xhist.set_ylabel('PDF', rotation=-90, color='blue', labelpad=18)
     ax_xhist.yaxis.label.set_color('blue')
+    ax_xhist2.set_ylabel('CDF', rotation=-90, color='red', labelpad=18)
+    ax_xhist2.yaxis.label.set_color('red')
 
     ax_yhist.plot(pdf_y, yi, color='blue', lw=1)
-    ax_yhist.twiny().plot(cdf_y, yi, color='red', linestyle='--', lw=1)
+    ax_yhist2 = ax_yhist.twiny()
+    ax_yhist2.plot(cdf_y, yi, color='red', linestyle='--', lw=1)
     ax_yhist.set_xlabel('PDF', color='blue')
     ax_yhist.xaxis.label.set_color('blue')
+    ax_yhist2.set_xlabel('CDF', color='red')
+    ax_yhist2.xaxis.label.set_color('red')
 
     # Labels and grid
-    ax_main.set_xlabel(xlabel, fontsize=12)
-    ax_main.set_ylabel(ylabel, fontsize=12)
+    ax_main.set_xlabel(xlabel, fontsize=16)
+    ax_main.set_ylabel(ylabel, fontsize=16)
     ax_xhist.set_xlim(ax_main.get_xlim())
     ax_yhist.set_ylim(ax_main.get_ylim())
     ax_xhist.grid(alpha=0.4, linestyle='--')
@@ -553,18 +570,8 @@ def pos_flux_plot(input_fluxes, output_fluxes, offsets, xbins, ybins,
     plt.savefig(save_path, dpi=300, bbox_inches='tight')
     plt.close()
     
-    # --- Deprecated functions ---
-    # --- These functions are deprecated and should be removed in future versions. ---
-
-
-
-
-
-
-
-
-
-
+# --- Deprecated functions ---
+# --- These functions are deprecated and should be removed in future versions. ---
 
 
 
@@ -608,7 +615,7 @@ def flux_reproduction_plot_deprecated(target_cat, sr_cat, target_cl, matching_di
     )
 
     # Set labels, scales, and limits
-    ax.set_xlabel(r"$S_{Target}$ (mJy)")
+    ax.set_xlabel(r"$S_{Target}$ [mJy]")
     ax.set_ylabel(r"$(S_{SR} - S_{Target}) / S_{Target}$")
     ax.set_xscale('log')
     ax.set_yticks(np.arange(-1, 1.2, 0.2))
@@ -831,8 +838,8 @@ def CompletenessReliabilityPlot(target_cat, sr_cat, target_cl, max_distance, sav
     axs[1].grid(which='both', alpha=0.3, color='lightgrey', linestyle='--')
 
     # Set the axis labels and title for the main plot
-    axs[0].set_xlabel('Super-resolved Source Flux (mJy)', fontsize=10)
-    axs[1].set_xlabel('Target Source Flux (mJy)', fontsize=10)
+    axs[0].set_xlabel('Super-resolved Source Flux [mJy]', fontsize=10)
+    axs[1].set_xlabel('Target Source Flux [mJy]', fontsize=10)
 
     axs[0].set_ylabel('Reliability', fontsize=10)
     axs[1].set_ylabel('Completeness', fontsize=10)
@@ -1074,14 +1081,14 @@ def scuba_recovery_plot(matched_catalog, save_path=None):
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 7), sharey=True)
     
     # Define plot limits and a true line for 1:1 recovery
-    xmax = 30  # mJy
+    xmax = 50  # mJy
     true_line = np.linspace(0, xmax + 5, 100)
     # Plot the first dataset
     ax1.errorbar(
         matched_catalog["S450"], 
         matched_catalog["S500SR"], 
         xerr=matched_catalog["S450_total_err"], 
-        markersize=6, 
+        markersize=5, 
         fmt='o', 
         ecolor='gray',
         elinewidth=1,
@@ -1098,8 +1105,8 @@ def scuba_recovery_plot(matched_catalog, save_path=None):
         linewidth=2
     )
 
-    ax1.set_xlabel(r"SCUBA-2 $450 \mu m$ Source Flux $S_{in}$ [mJy]", fontsize=12)
-    ax1.set_ylabel(r"Super-resolved $500 \mu m$ Source Flux $S_{SR}$ [mJy]", fontsize=12)
+    ax1.set_xlabel(r"SCUBA-2 450 $\mu m$ Source Flux $S_{in}$ [mJy]", fontsize=12)
+    ax1.set_ylabel(r"Super-resolved 500 $\mu m$ Source Flux $S_{SR}$ [mJy]", fontsize=12)
     ax1.set_xscale('log')
     ax1.set_yscale('log')
     ax1.tick_params(axis='both', which='major', labelsize=12)
@@ -1112,7 +1119,7 @@ def scuba_recovery_plot(matched_catalog, save_path=None):
         matched_catalog["S500corr"], 
         matched_catalog["S500SR"], 
         xerr=matched_catalog["S500corr_total_err"], 
-        markersize=6, 
+        markersize=5, 
         fmt='o', 
         ecolor='gray',
         elinewidth=1,
@@ -1127,20 +1134,30 @@ def scuba_recovery_plot(matched_catalog, save_path=None):
         true_line,
         'r--', 
         label="1:1 Recovery", 
-        linewidth=2
+        linewidth=2,
     )
+
+    # Plot the 1-sigma total line
+    sigma_conf = 6.8
+    sigma_instr = 2
+    sigma_total = np.sqrt(sigma_instr**2 + sigma_conf**2)
+
+    ax1.axvline(sigma_total, color='black', linestyle=':', lw=1.5)
+    ax1.text(sigma_total * 0.85, 1.35, r'1$\sigma_{total}$', color='black',
+             fontsize=14, rotation=90, va='center', alpha=0.6)
+    ax2.axvline(sigma_total, color='black', linestyle=':', lw=1.5)
+    ax2.text(sigma_total * 0.85, 1.35, r'1$\sigma_{total}$', color='black',
+             fontsize=14, rotation=90, va='center', alpha=0.6)
 
     ax2.set_xlabel(r"SCUBA-2 Converted $500 \mu m$ Source Flux $S_{in}$ [mJy]", fontsize=12)
     ax2.set_xscale('log')
     ax2.set_yscale('log')
     ax2.tick_params(axis='both', which='major', labelsize=12)
     ax2.set_xlim([1, xmax + 5])
-    ax2.legend(fontsize=12, frameon=False, loc='upper left')
+    #ax2.legend(fontsize=12, frameon=False, loc='upper left')
     
     # Adjust spacing between plots to remove horizontal space
     plt.subplots_adjust(wspace=0)
-    ax1.grid(True)
-    ax2.grid(True)
     
     # Save the figure
     plt.savefig(save_path, dpi=350, bbox_inches='tight')

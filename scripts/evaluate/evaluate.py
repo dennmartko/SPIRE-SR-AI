@@ -227,6 +227,7 @@ if __name__ == "__main__":
     # Plots come from our custom library
 
     # IQR flux statistics Target, Native and SR
+    # ["#8b0023", "#0a5c36", "#fbb917"]
     plot_binned_iqr(
         S_in_list=[matched_sr["SSPIRE500"], matched_target["SSPIRE500"], matched_native["SSPIRE500"]],
         S_out_list=[matched_sr["S500SR"], matched_target["source_flux_target"], matched_native["source_flux_native"]],
@@ -288,11 +289,11 @@ if __name__ == "__main__":
 
 
     ## Plot the 2D density plot of the flux reproduction and the positional offset between matches
-    n_bins = 75
+    n_bins = 40
     xbins1 = np.linspace(-1, 1, n_bins + 1)
     xbins2 = np.linspace(-1, 2, n_bins + 1)
     ybins1 = np.linspace(0, 4, n_bins + 1)
-    ybins2 = np.linspace(0, 8, n_bins + 1)
+    ybins2 = np.linspace(0, 8, n_bins*2 + 1)
     # Target vs SR
     matched_target_sr = cross_match_catalogs(df_sr, df_target, flux_col_source="S500SR", flux_col_target="source_flux_target")
 
@@ -300,7 +301,7 @@ if __name__ == "__main__":
         matched_target_sr['source_flux_target'].values,
         matched_target_sr['S500SR'].values,
         matched_target_sr['angDist'].values,
-        xbins=xbins1, ybins=ybins1, interpolation=True, save_path=os.path.join(sim_results_dir, "pos_flux_plot_target_vs_SR.png"),
+        xbins=xbins1, ybins=ybins1, interpolation=False, save_path=os.path.join(sim_results_dir, "pos_flux_plot_target_vs_SR.png"),
         xlabel=r'$(S_{SR} - S_{Target})/S_{Target}$',
     )
 
@@ -309,7 +310,7 @@ if __name__ == "__main__":
         matched_sr['SSPIRE500'].values,
         matched_sr['S500SR'].values,
         matched_sr['angDist'].values,
-        xbins=xbins1, ybins=ybins1, interpolation=True, save_path=os.path.join(sim_results_dir, "pos_flux_plot_input_vs_SR.png"),
+        xbins=xbins1, ybins=ybins1, interpolation=False, save_path=os.path.join(sim_results_dir, "pos_flux_plot_input_vs_SR.png"),
         xlabel=r'$(S_{SR} - S_{input})/S_{input}$',
     )
 
@@ -318,7 +319,7 @@ if __name__ == "__main__":
         matched_native['SSPIRE500'].values,
         matched_native['source_flux_native'].values,
         matched_native['angDist'].values,
-        xbins=xbins2, ybins=ybins2, interpolation=True, save_path=os.path.join(sim_results_dir, "pos_flux_plot_input_vs_native.png"),
+        xbins=xbins2, ybins=ybins2, interpolation=False, save_path=os.path.join(sim_results_dir, "pos_flux_plot_input_vs_native.png"),
         xlabel=r'$(S_{native} - S_{input})/S_{input}$',
     )
 
@@ -353,8 +354,8 @@ if __name__ == "__main__":
     predictions = SuperResolve(config, X, model, progress)
 
     # Now we put the images in the right format
-    images = np.squeeze(np.array([Y, predictions, abs(Y-predictions)]))*1e3
-
+    images = np.squeeze(np.array([X[:, :, :, -1:], predictions, Y])) * 1e3
+    print(images.shape)
     # We need to select an interesting source for each column/sample
     # We need to center highlighted region on truth/target position
     # We simply mask all sources that are within each WCS and take that catalog
@@ -382,8 +383,8 @@ if __name__ == "__main__":
         )
 
     # vmin/vmax per row
-    vmins = [0., 0., 0]
-    vmaxs = [15, 15, 10]
+    vmins = [0., 0., 0, 0.]
+    vmaxs = [30, 15, 15, 10]
     plot_image_grid(
         images,
         cat_sr_images=cat_sr_images,

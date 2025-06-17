@@ -184,6 +184,9 @@ if __name__ == "__main__":
 
     print(df_scuba.head())
 
+    # Define correction factor
+    corr_factor = 0.84
+
     # Set the source flux columns to be in mJy (scuba already in mJy)
     df_sr["S500SR"] *= 1000
 
@@ -196,16 +199,18 @@ if __name__ == "__main__":
     # Rename RA, Dec columns
     df_scuba.rename(columns={"RA": "ra", "Dec": "dec"}, inplace=True)
 
+    df_scuba['scuba_500corr'] = df_scuba['S450'] * corr_factor
+
     # cross-match the catalogs
-    matched_catalog = cross_match_catalogs(df_sr, df_scuba, flux_col_source="S500SR", flux_col_target="S450", keep_columns=["S450_total_err", "file_id"])
-    matched_catalog['S500corr'] = matched_catalog['S450'] * 0.85
-    matched_catalog['S500corr_total_err'] = matched_catalog["S450_total_err"] * 0.85
+    matched_catalog = cross_match_catalogs(df_sr, df_scuba, flux_col_source="S500SR", flux_col_target="scuba_500corr", keep_columns=["S450", "S450_total_err", "file_id"])
+    matched_catalog['S500corr'] = matched_catalog['S450'] * corr_factor
+    matched_catalog['S500corr_total_err'] = matched_catalog["S450_total_err"] * corr_factor
 
     print(matched_catalog.head())
 
 
     # Plot the fluxes
-    scuba_recovery_plot(matched_catalog, save_path=os.path.join(results_dir, "scuba_recovery_plot.png"))
+    scuba_recovery_plot(matched_catalog, save_path=os.path.join(results_dir, "scuba_recovery_plot.pdf"))
 
     # Store image samples
     
@@ -213,7 +218,7 @@ if __name__ == "__main__":
     predictions = SuperResolve(config, X, model, progress)
 
     # Now we put the images in the right format
-    images = np.squeeze(np.array([Y*0.85, predictions, abs(Y-predictions)]))*1e3
+    images = np.squeeze(np.array([X[:, :, :, -1:], predictions, Y*corr_factor]))*1e3
 
     # We need to select an interesting source for each column/sample
     # We need to center highlighted region on truth/target position
@@ -242,8 +247,8 @@ if __name__ == "__main__":
         )
 
     # vmin/vmax per row
-    vmins = [0., 0., 0]
-    vmaxs = [20, 20, 10]
+    vmins = [0, 0., 0., 0]
+    vmaxs = [30, 20, 20, 10]
     plot_image_grid(
         images,
         cat_sr_images=cat_sr_images,
@@ -258,6 +263,20 @@ if __name__ == "__main__":
         save_path=os.path.join(results_dir, "image_grid_scuba.png"),
     )
 
+    temp_matched_cat = matched_catalog[matched_catalog['S450'] >= 10]
+
+    print("Mean S500SR/Sscuba500:", np.mean(matched_catalog['S500SR']/matched_catalog['scuba_500corr']))
+    print("Median S500SR/Sscuba500:", np.median(matched_catalog['S500SR']/matched_catalog['scuba_500corr']))
+    print("Mean S500SR/S450:", np.mean(matched_catalog['S500SR']/matched_catalog['S450']))
+    print("Median S500SR/S450:", np.median(matched_catalog['S500SR']/matched_catalog['S450']))
 
 
 
+
+    print("Mean S500SR/Sscuba500:", np.mean(temp_matched_cat['S500SR']/temp_matched_cat['scuba_500corr']))
+    print("Median S500SR/Sscuba500:", np.median(temp_matched_cat['S500SR']/temp_matched_cat['scuba_500corr']))
+    print("Mean S500SR/S450:", np.mean(temp_matched_cat['S500SR']/temp_matched_cat['S450']))
+    print("Median S500SR/S450:", np.median(temp_matched_cat['S500SR']/temp_matched_cat['S450']))
+
+    # Save the matched catalog as a CSV file in the results directory
+    matched_catalog.to_csv("matched_catalog.csv", index=False)
